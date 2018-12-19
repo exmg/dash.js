@@ -19,7 +19,7 @@ stages:
     if: type = cron
 before_install: npm install -g grunt-cli
 after_success:
-  - test $TRAVIS_BRANCH = "development" && grunt deploy --git-commit=$TRAVIS_COMMIT --ftp-host=$DEPLOY_HOST --ftp-user=$DEPLOY_USER --ftp-pass=$DEPLOY_PASSWORD
+  - test $TRAVIS_BRANCH = "test_cd" && grunt deploy --git-commit=$TRAVIS_COMMIT --ftp-host=$DEPLOY_HOST --ftp-user=$DEPLOY_USER --ftp-pass=$DEPLOY_PASSWORD
 install:
   - npm install
 jobs:
