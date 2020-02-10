@@ -17,10 +17,10 @@ function ExmgFragmentDecrypt(config) {
 
         let messageObj;
         try {
-            messageObj = JSON.parse(message)
+            messageObj = JSON.parse(message);
         } catch (err) {
-            console.error('Failed to parse as JSON:', message)
-            console.error(err)
+            console.error('Failed to parse as JSON:', message);
+            console.error(err);
             return;
         }
 
