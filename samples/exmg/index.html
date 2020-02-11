@@ -1,0 +1,27 @@
+<html>
+    <head>
+        <!-- App -->
+        <script src="../../dist/dash.all.debug.js"></script>
+
+        <!-- EXMG MQTT -->
+        <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    </head>
+    <body>
+        <div>
+            <video id="videoPlayer" controls></video>
+        </div>
+        <script>
+            (function(){
+                var url = "http://localhost:8080/out.mpd";
+                var player = dashjs.MediaPlayer().create();
+                var video = document.querySelector("#videoPlayer");
+                player.updateSettings({ 'debug': { 'logLevel': dashjs.Debug.LOG_LEVEL_DEBUG }})
+                player.initialize(video, url, true);
+                window.player = player;
+
+                video.playbackRate = 0.5;
+                video.play();
+            })();
+        </script>
+    </body>
+</html>
