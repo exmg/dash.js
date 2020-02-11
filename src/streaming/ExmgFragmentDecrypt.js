@@ -17,6 +17,7 @@ const DIGEST_RETRY_TIMEOUT_MS = 3000;
  * @returns {Promise<Uint8Array>}
  */
 function decryptAesCtr(cipherData, key, iv) {
+    const crypto = window.crypto;
     if (!crypto) {
         throw new Error('WebCrypto API not available');
     }
@@ -54,7 +55,7 @@ function ExmgFragmentDecrypt(config) {
      * @type {ExmgCipherMessage[]}
      */
     const cipherMessages = [];
-    const movInitDataHash = {}
+    const movInitDataHash = {};
     const client = createExmgMqttSubscribeClient(onMqttMessage);
     const perf = window.performance;
 
@@ -131,7 +132,7 @@ function ExmgFragmentDecrypt(config) {
                 // if the key message has not arrived yet, re-try in a bit
                 setTimeout(() => {
                     digestFragmentBuffer(data, onResult);
-                }, DIGEST_RETRY_TIMEOUT_MS)
+                }, DIGEST_RETRY_TIMEOUT_MS);
                 keyFailure = true;
                 break;
             }
@@ -149,7 +150,7 @@ function ExmgFragmentDecrypt(config) {
             // decrypt the mdat buffer
             const mdat = mdats[index];
             clearBufferPromises.push(decryptAesCtr(mdat.data, key, iv));
-        };
+        }
 
         if (keyFailure) {
             return;
@@ -158,7 +159,7 @@ function ExmgFragmentDecrypt(config) {
         // awaiting all decrypt promise results ...
         Promise.all(clearBufferPromises).then((clearBuffers) => {
             const decryptTimeMs = perf.now() - now;
-            console.log(`Decrypted ${clearBuffers.length} fragment buffers in ${decryptTimeMs.toFixed(3)} ms`)
+            console.log(`Decrypted ${clearBuffers.length} fragment buffers in ${decryptTimeMs.toFixed(3)} ms`);
             // TODO: write results back into original downloaded segment data here
             onResult(data);
         });
@@ -206,11 +207,10 @@ function ExmgFragmentDecrypt(config) {
             throw new Error('MQTT client create function shall only be called once');
         }
 
-        console.log('EXMG MQTT:', 'connecting MQTT subscribe')
+        console.log('EXMG MQTT:', 'connecting MQTT subscribe');
 
-        var host = MQTT_HOST;
-
-        var options = {
+        const host = MQTT_HOST;
+        const options = {
             keepalive: 10,
             protocolId: 'MQTT',
             protocolVersion: 4,
@@ -219,8 +219,12 @@ function ExmgFragmentDecrypt(config) {
             connectTimeout: 30*1000,
             clientId: MQTT_CLIENT_ID
         };
-        var client = mqtt.connect(host, options);
 
+        if (!window.mqtt) {
+            throw new Error('`mqtt` is not available in window scope');
+        }
+
+        const client = window.mqtt.connect(host, options);
         client.on('connect', function () {
             // FIXME: handle/retry initial connection/sub failures
             client.subscribe(MQTT_TOPIC, function (err) {
@@ -230,21 +234,17 @@ function ExmgFragmentDecrypt(config) {
                     console.log('EXMG MQTT:', 'subscribed');
             });
         });
-
-
         client.on('message', function (topic, message) {
             onMessage(message.toString());
         });
-
         clientCreated = true;
-
         return client;
     }
 
     instance = {
         client,
         digestFragmentBuffer
-    }
+    };
 
     return instance;
 }
