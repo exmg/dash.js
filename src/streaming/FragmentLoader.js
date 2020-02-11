@@ -39,6 +39,8 @@ import Errors from './../core/errors/Errors';
 import FactoryMaker from '../core/FactoryMaker';
 import ExmgFragmentDecrypt from './ExmgFragmentDecrypt';
 
+let EXMG_ENABLE_CIPHER_DIGEST = localStorage.getItem('exmg:keysystem');
+
 function FragmentLoader(config) {
 
     config = config || {};
@@ -119,10 +121,13 @@ function FragmentLoader(config) {
                 success: function (data) {
                     //console.log('FragmentLoader:', request, data)
 
-                    exmgFragDecrypter.digestFragmentBuffer(data, (digestBuffer) => {
-                        report(digestBuffer);
-                    });
-
+                    if (EXMG_ENABLE_CIPHER_DIGEST) {
+                        exmgFragDecrypter.digestFragmentBuffer(data, (digestBuffer) => {
+                            report(digestBuffer);
+                        });
+                    } else {
+                        report(data);
+                    }
                 },
                 error: function (request, statusText, errorText) {
                     report(
