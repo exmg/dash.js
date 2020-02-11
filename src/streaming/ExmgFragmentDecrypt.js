@@ -18,6 +18,7 @@ function ExmgFragmentDecrypt(config) {
         let messageObj;
         try {
             messageObj = JSON.parse(message);
+            console.log('Parsed received cipher-msg:', messageObj);
         } catch (err) {
             console.error('Failed to parse as JSON:', message);
             console.error(err);
@@ -60,50 +61,35 @@ function ExmgFragmentDecrypt(config) {
             const tfhd = trafBox.boxes[0];
             const tfdt = trafBox.boxes[1];
             const trackInfo = movInitDataHash[tfhd.track_ID];
-            console.log('first PTS:', tfdt.baseMediaDecodeTime,
-                'timescale:', trackInfo.timescale);
+            //console.log('first PTS:', tfdt.baseMediaDecodeTime, 'timescale:', trackInfo.timescale);
+            const firstPtsSeconds = tfdt.baseMediaDecodeTime / trackInfo.timescale;
         });
-
-        console.log(moofs)
-        //console.log('parsed trafs:', trafs);
-        //console.log('parsed mdats:', mdats);
 
         onResult(data);
-
-        /*
-        window.crypto.subtle.decrypt(
-            {
-                name: "AES-CTR",
-                counter: ArrayBuffer(16), //The same counter you used to encrypt
-                length: 128, //The same length you used to encrypt
-            },
-            key, //from generateKey or importKey above
-            data //ArrayBuffer of the data
-        )
-        .then(function(decrypted){
-            //returns an ArrayBuffer containing the decrypted data
-            console.log(new Uint8Array(decrypted));
-        })
-        .catch(function(err){
-            console.error(err);
-        });
-        */
     }
 
-    setupExmgMqttSubscribe(onMqttMessage);
+    /**
+     *
+     */
+    function findCipherMessageByMediaTime(mediaTimeSecs) {
+        let matchMsg = null;
+        cipherMessages.forEach((msg) => {
+
+        });
+        return matchMsg;
+    }
+
+    const client = createExmgMqttSubscribeClient(onMqttMessage);
 
     instance = {
+        client,
         digestFragmentBuffer
     }
 
     return instance;
 }
 
-
-// private EXMG
-// TODO: move this function and its config to an own JS module
-// (external plugin, overloading FragmentLoader properly)
-function setupExmgMqttSubscribe(onMessage) {
+function createExmgMqttSubscribeClient(onMessage) {
 
     console.log('EXMG MQTT:', 'connecting MQTT subscribe')
 
@@ -134,7 +120,35 @@ function setupExmgMqttSubscribe(onMessage) {
         //console.log('EXMG MQTT:', message.toString());
         onMessage(message.toString());
     });
+
+    return client;
 }
 
+/**
+ * @param {Uint8Array} cipherData
+ * @param {Uint8Array} key
+ * @param {Uint8Array} iv
+ * @param {(Uint8Array) => void} onDecrypted
+ */
+function decryptAesCtr(cipherData, key, iv, onDecrypted) {
 
+    if (!window.crypto) {
+        throw new Error('WebCrypto API not available');
+    }
 
+    window.crypto.subtle.decrypt(
+        {
+            name: "AES-CTR",
+            counter: iv,
+            length: 64, // we use an 8-byte IV
+        },
+        key,
+        cipherData
+    )
+    .then(function(clearData){
+        onDecrypted(new Uint8Array(clearData));
+    })
+    .catch(function(err){
+        throw new Error('Error decrypting AES-CTR cipherdata: ' + err.message);
+    });
+}
