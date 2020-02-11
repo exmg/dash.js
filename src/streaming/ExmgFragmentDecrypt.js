@@ -47,17 +47,28 @@ function decryptAesCtr(cipherData, key, iv) {
     });
 }
 
-function ExmgFragmentDecrypt(config) {
+function ExmgFragmentDecrypt() {
     let instance;
     let clientCreated = false;
 
     /**
-     * @type {ExmgCipherMessage[]}
+     * @type {[track_id] => ExmgCipherMessage[]}
      */
-    const cipherMessages = [];
+    const cipherMessageHash = {};
+
     const movInitDataHash = {};
     const client = createExmgMqttSubscribeClient(onMqttMessage);
     const perf = window.performance;
+
+    function getOrCreateCipherMessagesForTrackId(id) {
+        if (cipherMessageHash[id]) {
+            return cipherMessageHash[id];
+        } else {
+            const cipherMessages = [];
+            cipherMessageHash[id] = cipherMessages;
+            return cipherMessages;
+        }
+    }
 
     /**
      * @param {string} message
@@ -67,13 +78,19 @@ function ExmgFragmentDecrypt(config) {
         // may fail if JSON message data is broken
         try {
             messageObj = JSON.parse(message);
-            //console.trace('Parsed received cipher message:', messageObj);
+            console.trace('Parsed received cipher message:', messageObj);
         } catch (err) {
             console.error('Failed to parse JSON:', message);
             console.error(err);
             return;
         }
-        cipherMessages.push(messageObj);
+
+        try {
+            const cipherMessages = getOrCreateCipherMessagesForTrackId(messageObj.exmg_track_fragment_info.track_id);
+            cipherMessages.push(messageObj);
+        } catch(err) {
+            console.error('Fatal error hashing received message:', err);
+        }
     }
 
     /**
@@ -169,9 +186,10 @@ function ExmgFragmentDecrypt(config) {
      * @param {number} mediaTimeSecs
      * @returns {ExmgCipherMessage}
      */
-    function findCipherMessageByMediaTime(mediaTimeSecs) {
-        let matchMsg = null;
+    function findCipherMessageByMediaTime(mediaTimeSecs, trackId) {
+        const cipherMessages = getOrCreateCipherMessagesForTrackId(trackId);
         // putting a try in case the message data is broken to catch it here
+        let matchMsg = null;
         try {
             // FIXME: replace by a binary search algo to be more efficient (this has O(N))
             for (let index = 0; index < cipherMessages.length; index++) {
