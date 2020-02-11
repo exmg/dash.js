@@ -8,7 +8,7 @@ const MQTT_HOST = "wss://mqtt.liveryvideo.com?jwt=eyJhbGciOiJSUzI1NiIsInR5cCI6Ik
 const MQTT_TOPIC = 'joep/test';
 const MQTT_CLIENT_ID = 'web1';
 
-const DIGEST_RETRY_TIMEOUT_MS = 3000;
+const DIGEST_RETRY_TIMEOUT_MS = 500;
 
 /**
  * @param {Uint8Array} cipherData Encrypted data buffer
@@ -60,12 +60,13 @@ function ExmgFragmentDecrypt() {
     const client = createExmgMqttSubscribeClient(onMqttMessage);
     const perf = window.performance;
 
-    function getOrCreateCipherMessagesForTrackId(id) {
-        if (cipherMessageHash[id]) {
-            return cipherMessageHash[id];
+    function getOrCreateCipherMessagesForTrackId(id, type) {
+        const hashKey = id + '_' + type;
+        if (cipherMessageHash[hashKey]) {
+            return cipherMessageHash[hashKey];
         } else {
             const cipherMessages = [];
-            cipherMessageHash[id] = cipherMessages;
+            cipherMessageHash[hashKey] = cipherMessages;
             return cipherMessages;
         }
     }
@@ -86,11 +87,19 @@ function ExmgFragmentDecrypt() {
         }
 
         try {
-            const cipherMessages = getOrCreateCipherMessagesForTrackId(messageObj.exmg_track_fragment_info.track_id);
+            const cipherMessages
+                = getOrCreateCipherMessagesForTrackId(
+                    messageObj.exmg_track_fragment_info.track_id,
+                    messageObj.exmg_track_fragment_info.codec_type
+                );
             cipherMessages.push(messageObj);
         } catch(err) {
             console.error('Fatal error hashing received message:', err);
         }
+    }
+
+    function mapInitData(parsedFile) {
+        //
     }
 
     /**
@@ -99,17 +108,35 @@ function ExmgFragmentDecrypt() {
      * @param {(Uint8Array) => void} onResult
      */
     function digestFragmentBuffer(data, onResult) {
+
         // parse whole segment with ISO-FF
         let parsedFile = ISOBoxer.parseBuffer(data);
 
         // check for init data
         const tkhd = parsedFile.fetch('tkhd');
         if (tkhd) {
+
             // map useful track info to id
-            const mdhd = parsedFile.fetch('mdhd');
+            let type;
+            if (tkhd.volume === 0 && tkhd.width > 0 && tkhd.height > 0) {
+                type = 'video';
+            } else if (tkhd.volume > 0 && tkhd.width === 0 && tkhd.height === 0) {
+                type = 'audio';
+            } else {
+                throw new Error('Unable to recognize track type from `tkhd` atom');
+                // FIXME: in case necessary, there are unambiguous solutions here
+            }
+
+            const timescale = parsedFile.fetch('mdhd').timescale;
+
+            const id = tkhd.track_ID;
+
             movInitDataHash[tkhd.track_ID] = {
-                timescale: mdhd.timescale
+                id,
+                timescale,
+                type
             };
+
             // return early, nothing more to do
             onResult(data);
             return;
@@ -138,13 +165,17 @@ function ExmgFragmentDecrypt() {
             // compute track fragment first PTS seconds
             const tfhd = trafBox.boxes[0];
             const tfdt = trafBox.boxes[1];
-            const trackInfo = movInitDataHash[tfhd.track_ID];
+
+            const trackId = tfhd.track_ID;
+            const trackInfo = movInitDataHash[trackId];
             const firstPtsSeconds = tfdt.baseMediaDecodeTime / trackInfo.timescale;
 
             // lookup key
-            const cipherMessageForBuffer = findCipherMessageByMediaTime(firstPtsSeconds);
+            const cipherMessageForBuffer = findCipherMessageByMediaTime(firstPtsSeconds, trackId, trackInfo.type);
             if (!cipherMessageForBuffer) {
-                console.warn('No matching cipher message for media fragment starting at:', firstPtsSeconds, 'secs');
+                console.warn(
+                    'No matching cipher message for media track-id', trackInfo.type + '_' + trackId,
+                    'fragment starting at:', firstPtsSeconds, 'secs');
                 console.warn('Re-scheduling media fragment decryptor digest!');
                 // if the key message has not arrived yet, re-try in a bit
                 setTimeout(() => {
@@ -186,8 +217,8 @@ function ExmgFragmentDecrypt() {
      * @param {number} mediaTimeSecs
      * @returns {ExmgCipherMessage}
      */
-    function findCipherMessageByMediaTime(mediaTimeSecs, trackId) {
-        const cipherMessages = getOrCreateCipherMessagesForTrackId(trackId);
+    function findCipherMessageByMediaTime(mediaTimeSecs, trackId, trackType) {
+        const cipherMessages = getOrCreateCipherMessagesForTrackId(trackId, trackType);
         // putting a try in case the message data is broken to catch it here
         let matchMsg = null;
         try {
