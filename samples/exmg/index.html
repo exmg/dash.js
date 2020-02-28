@@ -7,21 +7,40 @@
         <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     </head>
     <body>
-        <div>
-            <video id="videoPlayer" controls></video>
-        </div>
+
+        <p style="text-align: center;">
+            <video style="width: 80%" id="videoPlayer" controls muted></video>
+            <br><br>
+            <button onclick="go()">Go</button>
+        </p>
+
         <script>
-            (function(){
-                var url = "http://localhost:8080/out.mpd";
-                var player = dashjs.MediaPlayer().create();
-                var video = document.querySelector("#videoPlayer");
-                player.updateSettings({ 'debug': { 'logLevel': dashjs.Debug.LOG_LEVEL_DEBUG }})
+            var url = `http://10.211.55.6:8080/out.mpd`;
+            var player = dashjs.MediaPlayer().create();
+            var video = document.querySelector("#videoPlayer");
+
+            player.updateSettings({ 
+                debug: { 
+                    //logLevel: dashjs.Debug.LOG_LEVEL_DEBUG 
+                }, 
+                streaming: {
+                    //lowLatencyEnabled: true,
+                    liveDelay: 10,
+                    retryIntervals: {
+                        MediaSegment: 2500,
+                    },
+                    retryAttempts: {
+                        MediaSegment: 10,
+                    },
+                }
+            });
+
+            function go() {
                 player.initialize(video, url, true);
                 window.player = player;
 
-                video.playbackRate = 0.5;
                 video.play();
-            })();
+            }
         </script>
     </body>
 </html>
