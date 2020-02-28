@@ -1,14 +1,22 @@
 import ISOBoxer from 'codem-isoboxer';
 import FactoryMaker from '../core/FactoryMaker';
+import DashJSError from './vo/DashJSError';
+import Errors from './../core/errors/Errors';
 
 ExmgFragmentDecrypt.__dashjs_factory_name = 'ExmgFragmentDecrypt';
 export default FactoryMaker.getSingletonFactory(ExmgFragmentDecrypt);
 
+/*
 const MQTT_HOST = "wss://mqtt.liveryvideo.com?jwt=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyLWlkIjoid2ViMSIsImF1dGgtZ3JvdXBzIjoic3Vic2NyaWJlIn0.jovY0SCF9OZbsaj9Rx4yB8aN9QYxUNAOCd7m3TEkI49mu_3u1r3kqe27dOYOc1MrHOx0ezv2OQIYjum60mOTKr1W4jtNrXtpzAkheTu_j2pOffeKiz-8oNg-C99mvlXTad0XrRCiP30R_3UoKh7GzgwgWw0eJhr37RiyPILn-5R-cuVHZoh8ddWaQHyIYk2HfQQTAHtAdc56BHPWxiN196NpjYEnBitdBBG0CTpcxTula9kBS8vvek5Sdd3SMjAT3tGw0fX3RgHJMhbQYKxdpzz_Njnfh1f4MCJgFHZiu1O7obO-TmuiT-diWP4xD0JkryJ0a3rpqh61--Bt_3NDgVJzsKvg3JpHkOJtRAaR5keHAa5BRB_j1iGXr-0PBt8aRRL7NyFUtyh7QbcVAEA2txEIgPH767q-5poLfM-yF1zp7XtDZrYXMdJy3cIDOZ4zJJWrOAL1D8AaWLGIsFHXY5l3-7ptc0QapTFh1OZP3rbvV-yR0TfXJyFTKrKg6F9ULVHN6XEcz7PNfzG-x5Ca6SXa36oY4d8siC7SYnLh5jY1iGbarfwer37BgUBIpXsGAjMyOuw7DU5JsmVC6vzq9mNkFgfn7xTNHFjOZunn605DzA9R4-B2Dgs2cOSXKZcJoV-C-IdoE_z4v_15wXI-IMq7XwtzArnLi256KayX_js";
 const MQTT_TOPIC = 'joep/test';
 const MQTT_CLIENT_ID = 'web1';
+//*/
 
-const DIGEST_RETRY_TIMEOUT_MS = 500;
+const DIGEST_RETRY_TIMEOUT_MS = 5000;
+const KEY_SCOPE_SECONDS = 0.5
+const KEY_FILES_BASE_URL = "http://10.211.55.6:8080" // FIXME
+
+const DEBUG = true;
 
 /**
  * @param {Uint8Array} cipherData Encrypted data buffer
@@ -47,7 +55,41 @@ function decryptAesCtr(cipherData, key, iv) {
     });
 }
 
-function ExmgFragmentDecrypt() {
+/**
+ *
+ * @param {string} codecType
+ * @param {number} trackId
+ * @param {number} pts
+ * @returns {Promise<string | null | Error>}
+ */
+function fetchKeyMessage(codecType, trackId, pts) {
+
+    const url = KEY_FILES_BASE_URL + `/exmg_key_${codecType}_${trackId}_${pts}.json`;
+
+    return new Promise((resolve, reject) => {
+        fetch(url).then((res) => res.ok && res.text())
+            .then((message) => {
+                if (!message) {
+                    reject(null);
+                    return;
+                }
+                //console.log('Received messsage:', JSON.parse(message));
+                resolve(message);
+            })
+            .catch((err) => {
+                console.error('Fatal error fetching key-message:', err);
+                reject(err);
+            });
+    });
+}
+
+function ExmgFragmentDecrypt(config) {
+
+    config = config || {};
+    const context = this.context;
+
+    console.log('Created ExmgFragmentDecrypt');
+
     let instance;
     let clientCreated = false;
 
@@ -57,8 +99,10 @@ function ExmgFragmentDecrypt() {
     const cipherMessageHash = {};
 
     const movInitDataHash = {};
-    const client = createExmgMqttSubscribeClient(onMqttMessage);
+
     const perf = window.performance;
+
+    let mqttClient = null; //mqttClient = createMqttSubscribeClient(onCipherMessage);
 
     function getOrCreateCipherMessagesForTrackId(id, type) {
         const hashKey = id + '_' + type;
@@ -74,12 +118,14 @@ function ExmgFragmentDecrypt() {
     /**
      * @param {string} message
      */
-    function onMqttMessage(message) {
+    function onCipherMessage(message) {
+
         let messageObj;
+
         // may fail if JSON message data is broken
         try {
             messageObj = JSON.parse(message);
-            console.trace('Parsed received cipher message:', messageObj);
+            //console.debug('Parsed received cipher message:', messageObj);
         } catch (err) {
             console.error('Failed to parse JSON:', message);
             console.error(err);
@@ -87,12 +133,23 @@ function ExmgFragmentDecrypt() {
         }
 
         try {
+
+            const trackId = messageObj.fragment_info.track_id;
+            const codecType = messageObj.fragment_info.codec_type;
+            const mediaTimeSecs = messageObj.fragment_info.media_time_secs;
+
             const cipherMessages
                 = getOrCreateCipherMessagesForTrackId(
-                    messageObj.exmg_track_fragment_info.track_id,
-                    messageObj.exmg_track_fragment_info.codec_type
+                    messageObj.fragment_info.track_id,
+                    messageObj.fragment_info.codec_type
                 );
+
             cipherMessages.push(messageObj);
+
+            if (cipherMessages.length === 1) {
+                console.info(`Received very first cipher message for track ${codecType}_${trackId} at ${mediaTimeSecs} secs`);
+            }
+
         } catch(err) {
             console.error('Fatal error hashing received message:', err);
         }
@@ -102,12 +159,16 @@ function ExmgFragmentDecrypt() {
         //
     }
 
+    function makeSegmentTypeHashkey(mediaType, trackId) {
+        return mediaType + '_' + trackId;
+    }
+
     /**
      *
      * @param {Uint8Array} data
      * @param {(Uint8Array) => void} onResult
      */
-    function digestFragmentBuffer(data, onResult) {
+    function digestFragmentBuffer(data, mediaType, onResult) {
 
         // parse whole segment with ISO-FF
         let parsedFile = ISOBoxer.parseBuffer(data);
@@ -131,7 +192,7 @@ function ExmgFragmentDecrypt() {
 
             const id = tkhd.track_ID;
 
-            movInitDataHash[tkhd.track_ID] = {
+            movInitDataHash[makeSegmentTypeHashkey(type, id)] = {
                 id,
                 timescale,
                 type
@@ -145,19 +206,16 @@ function ExmgFragmentDecrypt() {
         // should be a (moof/mdat)s segment, check for traf boxes
         const trafs = parsedFile.fetchAll('traf');
         if (trafs.length === 0) {
-            console.warn('Media segment was not init data but has not track fragments');
+            console.warn('Media segment was not init data but has no track fragments');
+            console.debug(parsedFile);
+            if (DEBUG) debugger;
             onResult(data);
             return;
         }
 
-        const now = perf.now();
+        const keyMsgPromises = [];
 
-        let keyFailure = false;
-
-        // retrieve all mdats, lookup key-message by baseMediaDecodeTime
-        // and decrypt the payload
-        const mdats = parsedFile.fetchAll('mdat');
-        const clearBufferPromises = [];
+        let boundaryPtsSeconds = 0;
 
         for (let index = 0; index < trafs.length; index++) {
             const trafBox = trafs[index];
@@ -167,41 +225,87 @@ function ExmgFragmentDecrypt() {
             const tfdt = trafBox.boxes[1];
 
             const trackId = tfhd.track_ID;
-            const trackInfo = movInitDataHash[trackId];
-            const firstPtsSeconds = tfdt.baseMediaDecodeTime / trackInfo.timescale;
+            const firstPts = tfdt.baseMediaDecodeTime;
+            const trackInfo = movInitDataHash[makeSegmentTypeHashkey(mediaType, trackId)];
+            const firstPtsSeconds = firstPts / trackInfo.timescale;
 
             // lookup key
-            const cipherMessageForBuffer = findCipherMessageByMediaTime(firstPtsSeconds, trackId, trackInfo.type);
-            if (!cipherMessageForBuffer) {
-                console.warn(
-                    'No matching cipher message for media track-id', trackInfo.type + '_' + trackId,
-                    'fragment starting at:', firstPtsSeconds, 'secs');
-                console.warn('Re-scheduling media fragment decryptor digest!');
-                // if the key message has not arrived yet, re-try in a bit
-                setTimeout(() => {
-                    digestFragmentBuffer(data, onResult);
-                }, DIGEST_RETRY_TIMEOUT_MS);
-                keyFailure = true;
-                break;
-            }
+            const cipherMessageForBuffer = findCipherMessageByMediaTime(firstPtsSeconds, trackInfo.id, trackInfo.type);
+            if (!cipherMessageForBuffer && boundaryPtsSeconds <= firstPtsSeconds) {
 
-            //console.log('Media fragment matching cipher message found:', cipherMessageForBuffer);
+                console.log('Trying fetch key-message for:', trackInfo.type, '@:', firstPtsSeconds)
+
+                const keyMsgProm = new Promise((resolve, reject) => {
+                    fetchKeyMessage(trackInfo.type, trackInfo.id, firstPts)
+                        .then((message) => {
+                            onCipherMessage(message);
+                            resolve();
+                        })
+                        .catch(() => {
+                            console.warn(
+                                'No matching cipher message available for media track-id',
+                                trackInfo.type + '_' + trackInfo.id,
+                                'fragment starting at:', firstPtsSeconds, 'secs');
+                            reject();
+                        });
+                });
+
+                keyMsgPromises.push(keyMsgProm);
+
+                boundaryPtsSeconds = firstPtsSeconds + KEY_SCOPE_SECONDS;
+            }
+        }
+
+        if (keyMsgPromises.length === 0) {
+            decryptFragmentBuffer(data, parsedFile, mediaType, onResult);
+        } else {
+            Promise.all(keyMsgPromises)
+                .then(() => {
+                    decryptFragmentBuffer(data, parsedFile, mediaType, onResult);
+                })
+                .catch(() => {
+                    setTimeout(() => {
+                        digestFragmentBuffer(data, mediaType, onResult);
+                    }, DIGEST_RETRY_TIMEOUT_MS)
+                })
+        }
+    }
+
+    function decryptFragmentBuffer(data, parsedFile, mediaType, onResult) {
+        const now = perf.now();
+
+        // retrieve all trafs & mdats, lookup key-message by baseMediaDecodeTime
+        // and decrypt the payload
+
+        const mdats = parsedFile.fetchAll('mdat');
+        const trafs = parsedFile.fetchAll('traf');
+
+        const clearBufferPromises = [];
+
+        for (let index = 0; index < trafs.length; index++) {
+            const trafBox = trafs[index];
+            const tfhd = trafBox.boxes[0];
+            const tfdt = trafBox.boxes[1];
+
+            const trackId = tfhd.track_ID;
+            const firstPts = tfdt.baseMediaDecodeTime;
+            const trackInfo = movInitDataHash[makeSegmentTypeHashkey(mediaType, trackId)];
+            const firstPtsSeconds = firstPts / trackInfo.timescale;
+
+            const cipherMessageForBuffer = findCipherMessageByMediaTime(firstPtsSeconds, trackInfo.id, trackInfo.type);
 
             // create full key data from short keys
-            const keyShort = new Uint32Array([cipherMessageForBuffer.exmg_key]);
-            const ivShort = new Uint16Array([cipherMessageForBuffer.exmg_iv]);
+            const keyShort = new Uint32Array([cipherMessageForBuffer.key]);
+            const ivShort = new Uint16Array([cipherMessageForBuffer.iv]);
             const key = new Uint8Array(16);
             const iv = new Uint8Array(16);
+
             key.set(keyShort, 0);
             iv.set(ivShort, 0);
 
             // decrypt the mdat buffer
             const mdat = mdats[index];
             clearBufferPromises.push(decryptAesCtr(mdat.data, key, iv));
-        }
-
-        if (keyFailure) {
-            return;
         }
 
         // awaiting all decrypt promise results ...
@@ -214,49 +318,39 @@ function ExmgFragmentDecrypt() {
     }
 
     /**
-     * @param {number} mediaTimeSecs
+     * @param {number} lookupMediaTimeSecs
      * @returns {ExmgCipherMessage}
      */
-    function findCipherMessageByMediaTime(mediaTimeSecs, trackId, trackType) {
+    function findCipherMessageByMediaTime(lookupMediaTimeSecs, trackId, trackType) {
         const cipherMessages = getOrCreateCipherMessagesForTrackId(trackId, trackType);
-        // putting a try in case the message data is broken to catch it here
+
         let matchMsg = null;
-        try {
-            // FIXME: replace by a binary search algo to be more efficient (this has O(N))
-            for (let index = 0; index < cipherMessages.length; index++) {
-                const msg = cipherMessages[index];
-                const firstPtsSeconds = msg.exmg_track_fragment_info.media_time_in_seconds;
-                if (firstPtsSeconds <= mediaTimeSecs) {
-                    if (index === cipherMessages.length - 1) {
-                        matchMsg = msg;
-                        break;
-                    }
-
-                    const nextFragmentFirstPtsSecs
-                        = cipherMessages[index + 1]
-                            .exmg_track_fragment_info
-                            .media_time_in_seconds;
-
-                    if (nextFragmentFirstPtsSecs > mediaTimeSecs) {
-                        matchMsg = msg;
-                        break;
-                    }
+        for (let index = 0; index < cipherMessages.length; index++) {
+            const msg = cipherMessages[index];
+            try {
+                const keyFirstPtsSeconds = msg.fragment_info.media_time_secs; // corresponds to first PTS for that key
+                const keyBoundaryPtsSecs = keyFirstPtsSeconds + msg.key_max_duration_secs; // key-scope boundary
+                if (lookupMediaTimeSecs >= keyFirstPtsSeconds && lookupMediaTimeSecs < keyBoundaryPtsSecs) {
+                    matchMsg = msg;
+                    break;
                 }
+            } catch(err) {
+                console.error('Error accessing key-message data:', err.message);
             }
-        } catch(err) {
-            console.error('Error looking up cipher message info:', err);
-            return null;
+        }
+        if (!matchMsg) {
+            //console.warn('key not found for fragment')
         }
         return matchMsg;
     }
 
-    function createExmgMqttSubscribeClient(onMessage) {
+    function createMqttSubscribeClient(onMessage) {
 
         if (clientCreated) {
             throw new Error('MQTT client create function shall only be called once');
         }
 
-        console.log('EXMG MQTT:', 'connecting MQTT subscribe');
+        console.info('EXMG MQTT:', 'connecting MQTT subscribe');
 
         const host = MQTT_HOST;
         const options = {
@@ -280,7 +374,7 @@ function ExmgFragmentDecrypt() {
                 if (err)
                     console.error('EXMG MQTT:', 'subscribe error: ' + err);
                 else
-                    console.log('EXMG MQTT:', 'subscribed');
+                    console.info('EXMG MQTT:', 'subscribed');
             });
         });
         client.on('message', function (topic, message) {
@@ -290,8 +384,13 @@ function ExmgFragmentDecrypt() {
         return client;
     }
 
+    // FIXME: destroy client when player terminates session
+    function disposeMqttSubClient() {
+
+    }
+
     instance = {
-        client,
+        mqttClient,
         digestFragmentBuffer
     };
 
