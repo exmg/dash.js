@@ -1,6 +1,10 @@
 <html>
     <head>
         <!-- App -->
+
+        <script>
+            
+        </script>
         <script src="../../dist/dash.all.debug.js"></script>
 
         <!-- EXMG MQTT -->
@@ -26,13 +30,8 @@
                 streaming: {
                     //lowLatencyEnabled: true,
                     liveDelay: 10,
-                    retryIntervals: {
-                        MediaSegment: 2500,
-                    },
-                    retryAttempts: {
-                        MediaSegment: 10,
-                    },
-                }
+                    keyFilesBaseUrl: "http://10.211.55.6:8080"
+                },
             });
 
             function go() {
