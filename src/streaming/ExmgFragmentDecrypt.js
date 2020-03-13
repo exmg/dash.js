@@ -2,6 +2,7 @@ import ISOBoxer from 'codem-isoboxer';
 import FactoryMaker from '../core/FactoryMaker';
 import DashJSError from './vo/DashJSError';
 import Errors from './../core/errors/Errors';
+import Settings from './../core/Settings';
 
 ExmgFragmentDecrypt.__dashjs_factory_name = 'ExmgFragmentDecrypt';
 export default FactoryMaker.getSingletonFactory(ExmgFragmentDecrypt);
@@ -13,9 +14,7 @@ const MQTT_CLIENT_ID = 'web1';
 //*/
 
 const DIGEST_RETRY_TIMEOUT_MS = 5000;
-const KEY_SCOPE_SECONDS = 0.5
-const KEY_FILES_BASE_URL = "http://10.211.55.6:8080" // FIXME
-
+const KEY_SCOPE_SECONDS = 2.0
 const DEBUG = true;
 
 /**
@@ -26,8 +25,8 @@ const DEBUG = true;
  */
 function decryptAesCtr(cipherData, key, iv) {
     const crypto = window.crypto;
-    if (!crypto) {
-        throw new Error('WebCrypto API not available');
+    if (!crypto || !crypto.subtle) {
+        throw new Error('WebCrypto (Subtle) API not available');
     }
     const algoId = 'AES-CTR';
     return crypto.subtle.importKey(
@@ -63,9 +62,11 @@ function decryptAesCtr(cipherData, key, iv) {
  * @returns {Promise<string | null | Error>}
  */
 function fetchKeyMessage(codecType, trackId, pts) {
+    const url = keyFilesBaseUrl + `/exmg_key_${codecType}_${trackId}_${pts}.json`;
+    return fetchKeyMessageUrl(url);
+}
 
-    const url = KEY_FILES_BASE_URL + `/exmg_key_${codecType}_${trackId}_${pts}.json`;
-
+function fetchKeyMessageUrl(url) {
     return new Promise((resolve, reject) => {
         fetch(url).then((res) => res.ok && res.text())
             .then((message) => {
@@ -83,15 +84,47 @@ function fetchKeyMessage(codecType, trackId, pts) {
     });
 }
 
+/**
+ *
+ * @param {string} codecType
+ * @returns {Promise<string | null>}
+ */
+function fetchKeyIndex(keyFilesBaseUrl, codecType, retries = 3) {
+    const url = keyFilesBaseUrl + '/exmg_key_index_' + codecType;
+    return fetch(url)
+        .then((response) => {
+            if (response.ok) {
+                return response.text();
+            } else {
+                if (retries >= 0) {
+                    console.warn('Retrial attempts for fetching key-index. Counter:', retries);
+                    return fetchKeyIndex(url, codecType, --retries);
+                } else {
+                    return null;
+                }
+            }
+        })
+}
+
 function ExmgFragmentDecrypt(config) {
 
     config = config || {};
+
+    const keyFilesBaseUrl = Settings(context).getInstance().get().streaming.keyFilesBaseUrl;
+
     const context = this.context;
 
     console.log('Created ExmgFragmentDecrypt');
 
     let instance;
     let clientCreated = false;
+
+    let audioKeyIndex = null;
+    let videoKeyIndex = null;
+    let keyIndexUpdateInterval = null;
+
+    const audioKeyMap = {}
+    const videoKeyMap = {}
 
     /**
      * @type {[track_id] => ExmgCipherMessage[]}
@@ -103,6 +136,66 @@ function ExmgFragmentDecrypt(config) {
     const perf = window.performance;
 
     let mqttClient = null; //mqttClient = createMqttSubscribeClient(onCipherMessage);
+
+    const keyIndexUpdateMs = 2 * KEY_SCOPE_SECONDS * 1000;
+
+    //*
+    keyIndexUpdateInterval = setInterval(() => {
+        fetchKeyIndex(keyFilesBaseUrl, 'audio').then((index) => {
+            audioKeyIndex = index.split('\n');
+            audioKeyIndex
+                = audioKeyIndex.map((url) => url.substr(url.lastIndexOf('/') + 1))
+                                .filter((url) => !!url.length);
+            //console.log(audioKeyIndex)
+            fetchKeysOnIndexUpdated('audio')
+        });
+        fetchKeyIndex(keyFilesBaseUrl, 'video').then((index) => {
+            videoKeyIndex = index.split('\n')
+            videoKeyIndex
+                = videoKeyIndex.map((url) => url.substr(url.lastIndexOf('/') + 1))
+                                .filter((url) => !!url.length);
+            //console.log(videoKeyIndex)
+            fetchKeysOnIndexUpdated('video')
+        });
+    }, keyIndexUpdateMs)
+    //*/
+
+    function fetchKeysOnIndexUpdated(codecType) {
+        switch (codecType) {
+        case 'audio':
+            audioKeyIndex.forEach((url) => {
+                if (!audioKeyMap[url]) {
+                    audioKeyMap[url] = true;
+                    fetchKeyMessageUrl(keyFilesBaseUrl + url)
+                        .then((message) => {
+                            audioKeyMap[url] = message;
+                            onCipherMessage(message);
+                        })
+                        .catch((err) => {
+                            console.warn('Failure to retrieve key (no retrial)!')
+                            console.error(err);
+                        });
+                }
+            })
+            break;
+        case 'video':
+            videoKeyIndex.forEach((url) => {
+                if (!videoKeyMap[url]) {
+                    videoKeyMap[url] = true;
+                    fetchKeyMessageUrl(keyFilesBaseUrl + url)
+                        .then((message) => {
+                            videoKeyMap[url] = message;
+                            onCipherMessage(message);
+                        })
+                        .catch((err) => {
+                            console.warn('Failure to retrieve key (no retrial)!')
+                            console.error(err);
+                        });
+                }
+            })
+            break;
+        }
+    }
 
     function getOrCreateCipherMessagesForTrackId(id, type) {
         const hashKey = id + '_' + type;
@@ -153,10 +246,6 @@ function ExmgFragmentDecrypt(config) {
         } catch(err) {
             console.error('Fatal error hashing received message:', err);
         }
-    }
-
-    function mapInitData(parsedFile) {
-        //
     }
 
     function makeSegmentTypeHashkey(mediaType, trackId) {
@@ -213,9 +302,9 @@ function ExmgFragmentDecrypt(config) {
             return;
         }
 
-        const keyMsgPromises = [];
+        const keyMessages = [];
 
-        let boundaryPtsSeconds = 0;
+        let isKeyMissing = false;
 
         for (let index = 0; index < trafs.length; index++) {
             const trafBox = trafs[index];
@@ -231,43 +320,19 @@ function ExmgFragmentDecrypt(config) {
 
             // lookup key
             const cipherMessageForBuffer = findCipherMessageByMediaTime(firstPtsSeconds, trackInfo.id, trackInfo.type);
-            if (!cipherMessageForBuffer && boundaryPtsSeconds <= firstPtsSeconds) {
 
-                console.log('Trying fetch key-message for:', trackInfo.type, '@:', firstPtsSeconds)
-
-                const keyMsgProm = new Promise((resolve, reject) => {
-                    fetchKeyMessage(trackInfo.type, trackInfo.id, firstPts)
-                        .then((message) => {
-                            onCipherMessage(message);
-                            resolve();
-                        })
-                        .catch(() => {
-                            console.warn(
-                                'No matching cipher message available for media track-id',
-                                trackInfo.type + '_' + trackInfo.id,
-                                'fragment starting at:', firstPtsSeconds, 'secs');
-                            reject();
-                        });
-                });
-
-                keyMsgPromises.push(keyMsgProm);
-
-                boundaryPtsSeconds = firstPtsSeconds + KEY_SCOPE_SECONDS;
+            if (!cipherMessageForBuffer) {
+                isKeyMissing = true;
             }
+            keyMessages.push(cipherMessageForBuffer);
         }
 
-        if (keyMsgPromises.length === 0) {
+        if (!isKeyMissing) {
             decryptFragmentBuffer(data, parsedFile, mediaType, onResult);
         } else {
-            Promise.all(keyMsgPromises)
-                .then(() => {
-                    decryptFragmentBuffer(data, parsedFile, mediaType, onResult);
-                })
-                .catch(() => {
-                    setTimeout(() => {
-                        digestFragmentBuffer(data, mediaType, onResult);
-                    }, DIGEST_RETRY_TIMEOUT_MS)
-                })
+            setTimeout(() => {
+                digestFragmentBuffer(data, mediaType, onResult);
+            }, DIGEST_RETRY_TIMEOUT_MS);
         }
     }
 
