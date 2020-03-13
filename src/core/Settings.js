@@ -353,6 +353,7 @@ function Settings() {
             logLevel: Debug.LOG_LEVEL_WARNING
         },
         streaming: {
+            keyFilesBaseUrl: "http://10.211.55.6:8080/",
             metricsMaxListDepth: 1000,
             abandonLoadTimeout: 10000,
             liveDelayFragmentCount: 4,
