@@ -14,7 +14,7 @@ const MQTT_CLIENT_ID = 'web1';
 //*/
 
 const DIGEST_RETRY_TIMEOUT_MS = 5000;
-const KEY_SCOPE_SECONDS = 2.0
+const KEY_SCOPE_SECONDS = 0.5
 const DEBUG = true;
 
 /**
@@ -237,6 +237,8 @@ function ExmgFragmentDecrypt(config) {
                     messageObj.fragment_info.codec_type
                 );
 
+            console.log('Received key for', codecType, 'media-time scope:', messageObj.fragment_info.media_time_secs);
+
             cipherMessages.push(messageObj);
 
             if (cipherMessages.length === 1) {
@@ -330,9 +332,7 @@ function ExmgFragmentDecrypt(config) {
         if (!isKeyMissing) {
             decryptFragmentBuffer(data, parsedFile, mediaType, onResult);
         } else {
-            setTimeout(() => {
-                digestFragmentBuffer(data, mediaType, onResult);
-            }, DIGEST_RETRY_TIMEOUT_MS);
+            console.warn('Missing key-message for fragment (not retrying)!');
         }
     }
 
