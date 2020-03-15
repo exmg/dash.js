@@ -13,7 +13,8 @@ const MQTT_TOPIC = 'joep/test';
 const MQTT_CLIENT_ID = 'web1';
 //*/
 
-const KEY_SCOPE_SECONDS = 0.5
+const KEY_MISSING_ABANDON_TIMEOUT_MS = 1000;
+const KEY_UPDATE_INTERVAL_MS = 2000;
 const DEBUG = true;
 
 /**
@@ -138,7 +139,7 @@ function ExmgFragmentDecrypt(config) {
 
     let mqttClient = null; //mqttClient = createMqttSubscribeClient(onCipherMessage);
 
-    const keyIndexUpdateMs = 2 * KEY_SCOPE_SECONDS * 1000;
+    const keyIndexUpdateMs = KEY_UPDATE_INTERVAL_MS;
 
     //*
     keyIndexUpdateInterval = setInterval(() => {
@@ -323,10 +324,9 @@ function ExmgFragmentDecrypt(config) {
             const trackId = tfhd.track_ID;
             const firstPts = tfdt.baseMediaDecodeTime;
             const trackInfo = movInitDataHash[makeSegmentTypeHashkey(mediaType, trackId)];
-            const firstPtsSeconds = firstPts / trackInfo.timescale;
 
             // lookup key
-            const cipherMessageForBuffer = findCipherMessageByMediaTime(firstPtsSeconds, trackInfo.id, trackInfo.type);
+            const cipherMessageForBuffer = findCipherMessageByMediaTime(firstPts, trackInfo.id, trackInfo.type);
 
             if (!cipherMessageForBuffer) {
                 isKeyMissing = true;
@@ -342,7 +342,7 @@ function ExmgFragmentDecrypt(config) {
             //eventBus.trigger(Events.PLAYBACK_NOT_ALLOWED);
             setTimeout(() => {
                 eventBus.trigger(Events.LOADING_ABANDONED, {request: request, mediaType: request.mediaType, sender: loaderInstance});
-            }, 1000);
+            }, KEY_MISSING_ABANDON_TIMEOUT_MS);
 
             //loaderInstance.abort();
             //onResult(null);
@@ -399,16 +399,18 @@ function ExmgFragmentDecrypt(config) {
      * @param {number} lookupMediaTimeSecs
      * @returns {ExmgCipherMessage}
      */
-    function findCipherMessageByMediaTime(lookupMediaTimeSecs, trackId, trackType) {
+    function findCipherMessageByMediaTime(firstPts, trackId, trackType) {
+
         const cipherMessages = getOrCreateCipherMessagesForTrackId(trackId, trackType);
 
         let matchMsg = null;
         for (let index = 0; index < cipherMessages.length; index++) {
             const msg = cipherMessages[index];
             try {
-                const keyFirstPtsSeconds = msg.fragment_info.media_time_secs; // corresponds to first PTS for that key
-                const keyBoundaryPtsSecs = keyFirstPtsSeconds + msg.key_max_duration_secs; // key-scope boundary
-                if (lookupMediaTimeSecs >= keyFirstPtsSeconds && lookupMediaTimeSecs < keyBoundaryPtsSecs) {
+                const keyFirstPts = msg.fragment_info.first_pts; // corresponds to first PTS for that key
+                const keyDuration = msg.fragment_info.duration;
+                const keyBoundaryPts = keyFirstPts + keyDuration;
+                if (firstPts >= keyFirstPts && firstPts < keyBoundaryPts) {
                     matchMsg = msg;
                     break;
                 }
