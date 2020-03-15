@@ -40,12 +40,6 @@
                     },
                 });
 
-                player.on('playbackNotAllowed', () => {
-                    console.warn('Playback not allowed!')
-                });
-
-                console.log('Calling MediaPlayer.initialize')
-
                 player.initialize(video, url, true);
 
                 video.play();
