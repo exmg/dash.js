@@ -1,7 +1,7 @@
 import ISOBoxer from 'codem-isoboxer';
 import FactoryMaker from '../core/FactoryMaker';
-import DashJSError from './vo/DashJSError';
-import Errors from './../core/errors/Errors';
+import EventBus from '../core/EventBus';
+import Events from '../core/events/Events';
 import Settings from './../core/Settings';
 
 ExmgFragmentDecrypt.__dashjs_factory_name = 'ExmgFragmentDecrypt';
@@ -13,7 +13,6 @@ const MQTT_TOPIC = 'joep/test';
 const MQTT_CLIENT_ID = 'web1';
 //*/
 
-const DIGEST_RETRY_TIMEOUT_MS = 5000;
 const KEY_SCOPE_SECONDS = 0.5
 const DEBUG = true;
 
@@ -109,6 +108,8 @@ function fetchKeyIndex(keyFilesBaseUrl, codecType, retries = 3) {
 function ExmgFragmentDecrypt(config) {
 
     config = config || {};
+
+    //const eventBus = EventBus(context).getInstance();
 
     const keyFilesBaseUrl = Settings(context).getInstance().get().streaming.keyFilesBaseUrl;
 
@@ -256,10 +257,14 @@ function ExmgFragmentDecrypt(config) {
 
     /**
      *
-     * @param {Uint8Array} data
-     * @param {(Uint8Array) => void} onResult
+     * @param {Uint8Array} data Fragment data loaded completely
+     * @param {*} request Handle to dash.js loader request
+     * @param {(Uint8Array) => void} onResult Loader "report" callback for this request
+     * @param {FragmentLoader} loader Loader instance
      */
-    function digestFragmentBuffer(data, mediaType, onResult) {
+    function digestFragmentBuffer(data, request, onResult, loaderInstance, eventBus) {
+
+        const {mediaType} = request;
 
         // parse whole segment with ISO-FF
         let parsedFile = ISOBoxer.parseBuffer(data);
@@ -325,6 +330,7 @@ function ExmgFragmentDecrypt(config) {
 
             if (!cipherMessageForBuffer) {
                 isKeyMissing = true;
+                break;
             }
             keyMessages.push(cipherMessageForBuffer);
         }
@@ -332,7 +338,14 @@ function ExmgFragmentDecrypt(config) {
         if (!isKeyMissing) {
             decryptFragmentBuffer(data, parsedFile, mediaType, onResult);
         } else {
-            console.warn('Missing key-message for fragment (not retrying)!');
+            console.warn('Missing key-message for', request.mediaType,'fragment (triggering loader-abandon event):', request.url);
+            //eventBus.trigger(Events.PLAYBACK_NOT_ALLOWED);
+            setTimeout(() => {
+                eventBus.trigger(Events.LOADING_ABANDONED, {request: request, mediaType: request.mediaType, sender: loaderInstance});
+            }, 1000);
+
+            //loaderInstance.abort();
+            //onResult(null);
         }
     }
 

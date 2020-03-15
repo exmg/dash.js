@@ -20,23 +20,33 @@
 
         <script>
             var url = `http://10.211.55.6:8080/out.mpd`;
-            var player = dashjs.MediaPlayer().create();
             var video = document.querySelector("#videoPlayer");
-
-            player.updateSettings({ 
-                debug: { 
-                    //logLevel: dashjs.Debug.LOG_LEVEL_DEBUG 
-                }, 
-                streaming: {
-                    //lowLatencyEnabled: true,
-                    liveDelay: 10,
-                    keyFilesBaseUrl: "http://10.211.55.6:8080"
-                },
-            });
+            var player = null;
 
             function go() {
-                player.initialize(video, url, true);
+                player && player.reset();
+                player = dashjs.MediaPlayer().create();
+
                 window.player = player;
+
+                player.updateSettings({ 
+                    debug: { 
+                        logLevel: dashjs.Debug.LOG_LEVEL_DEBUG 
+                    }, 
+                    streaming: {
+                        //lowLatencyEnabled: true,
+                        liveDelay: 10,
+                        keyFilesBaseUrl: "http://10.211.55.6:8080"
+                    },
+                });
+
+                player.on('playbackNotAllowed', () => {
+                    console.warn('Playback not allowed!')
+                });
+
+                console.log('Calling MediaPlayer.initialize')
+
+                player.initialize(video, url, true);
 
                 video.play();
             }

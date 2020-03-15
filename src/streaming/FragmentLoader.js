@@ -45,11 +45,11 @@ function FragmentLoader(config) {
 
     config = config || {};
     const context = this.context;
-    const eventBus = EventBus(context).getInstance();
 
     let instance,
         httpLoader;
 
+    const eventBus = EventBus(context).getInstance();
     const exmgFragDecrypter = ExmgFragmentDecrypt(context).getInstance();
 
     function setup() {
@@ -121,7 +121,7 @@ function FragmentLoader(config) {
                 success: function (data) {
                     if (EXMG_ENABLE_CIPHER_DIGEST) {
                         console.log('Processing via ExmgFragmentDecrypt:', request.url)
-                        exmgFragDecrypter.digestFragmentBuffer(data, request.mediaType, report);
+                        exmgFragDecrypter.digestFragmentBuffer(data, request, report, instance, eventBus);
                     } else {
                         report(data);
                     }
