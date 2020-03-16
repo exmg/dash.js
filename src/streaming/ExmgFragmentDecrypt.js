@@ -110,57 +110,46 @@ function ExmgFragmentDecrypt(config) {
 
     config = config || {};
 
-    //const eventBus = EventBus(context).getInstance();
-
-    const keyFilesBaseUrl = Settings(context).getInstance().get().streaming.keyFilesBaseUrl;
-
-    const context = this.context;
-
-    console.log('Created ExmgFragmentDecrypt');
-
     let instance;
-    let clientCreated = false;
-
+    //let clientCreated = false;
+    //let mqttClient = null; //mqttClient = createMqttSubscribeClient(onCipherMessage);
+    let keyIndexUpdateInterval = null;
     let audioKeyIndex = null;
     let videoKeyIndex = null;
-    let keyIndexUpdateInterval = null;
-
     const audioKeyMap = {}
     const videoKeyMap = {}
-
     /**
      * @type {[track_id] => ExmgCipherMessage[]}
      */
     const cipherMessageHash = {};
-
     const movInitDataHash = {};
-
     const perf = window.performance;
-
-    let mqttClient = null; //mqttClient = createMqttSubscribeClient(onCipherMessage);
-
     const keyIndexUpdateMs = KEY_UPDATE_INTERVAL_MS;
+    const context = this.context;
+    const keyFilesBaseUrl = Settings(context).getInstance().get().streaming.keyFilesBaseUrl;
 
-    //*
     keyIndexUpdateInterval = setInterval(() => {
         fetchKeyIndex(keyFilesBaseUrl, 'audio').then((index) => {
-            audioKeyIndex = index.split('\n');
-            audioKeyIndex
-                = audioKeyIndex.map((url) => url.substr(url.lastIndexOf('/') + 1))
-                                .filter((url) => !!url.length);
-            //console.log(audioKeyIndex)
+            audioKeyIndex = extractKeyIndexUrls(index);
             fetchKeysOnIndexUpdated('audio')
         });
         fetchKeyIndex(keyFilesBaseUrl, 'video').then((index) => {
-            videoKeyIndex = index.split('\n')
-            videoKeyIndex
-                = videoKeyIndex.map((url) => url.substr(url.lastIndexOf('/') + 1))
-                                .filter((url) => !!url.length);
-            //console.log(videoKeyIndex)
+            videoKeyIndex = extractKeyIndexUrls(index);
             fetchKeysOnIndexUpdated('video')
         });
     }, keyIndexUpdateMs)
-    //*/
+
+    /**
+     *
+     * @param {string} keyIndexData
+     * @returns {Array<string>}
+     */
+    function extractKeyIndexUrls(keyIndexData) {
+        const keyIndexList = keyIndexData.split('\n');
+        keyIndexList = keyIndexList.map((url) => url.substr(url.lastIndexOf('/') + 1))
+                                .filter((url) => !!url.length);
+        return keyIndexList;
+    }
 
     function fetchKeysOnIndexUpdated(codecType) {
         switch (codecType) {
@@ -339,13 +328,9 @@ function ExmgFragmentDecrypt(config) {
             decryptFragmentBuffer(data, parsedFile, mediaType, onResult);
         } else {
             console.warn('Missing key-message for', request.mediaType,'fragment (triggering loader-abandon event):', request.url);
-            //eventBus.trigger(Events.PLAYBACK_NOT_ALLOWED);
             setTimeout(() => {
                 eventBus.trigger(Events.LOADING_ABANDONED, {request: request, mediaType: request.mediaType, sender: loaderInstance});
             }, KEY_MISSING_ABANDON_TIMEOUT_MS);
-
-            //loaderInstance.abort();
-            //onResult(null);
         }
     }
 
