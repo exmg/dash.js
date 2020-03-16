@@ -49,10 +49,11 @@ function FragmentLoader(config) {
     let instance,
         httpLoader;
 
-    const eventBus = EventBus(context).getInstance();
     const exmgFragDecrypter = ExmgFragmentDecrypt(context).getInstance();
+    const eventBus = EventBus(context).getInstance();
 
     function setup() {
+        exmgFragDecrypter.init();
         const boxParser = BoxParser(context).getInstance();
         httpLoader = HTTPLoader(context).create({
             errHandler: config.errHandler,
@@ -163,6 +164,9 @@ function FragmentLoader(config) {
         if (httpLoader) {
             httpLoader.abort();
             httpLoader = null;
+        }
+        if (exmgFragDecrypter) {
+            exmgFragDecrypter.deinit();
         }
     }
 
