@@ -111,12 +111,14 @@ function ExmgFragmentDecrypt(config) {
 
     //let clientCreated = false;
     //let mqttClient = null; //mqttClient = createMqttSubscribeClient(onCipherMessage);
+
     let instance;
     let keyFilesBaseUrl;
     let keyIndexUpdateInterval = null;
     let keyUpdateIntervalMs;
     let audioKeyIndex = null;
     let videoKeyIndex = null;
+
     const audioKeyMap = {}
     const videoKeyMap = {}
     /**
