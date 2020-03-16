@@ -13,7 +13,6 @@ const MQTT_TOPIC = 'joep/test';
 const MQTT_CLIENT_ID = 'web1';
 //*/
 
-const KEY_MISSING_ABANDON_TIMEOUT_MS = 1000;
 const KEY_UPDATE_INTERVAL_MS = 2000;
 const DEBUG = true;
 
@@ -337,7 +336,7 @@ function ExmgFragmentDecrypt(config) {
             console.warn('Missing key-message for', request.mediaType,'fragment (triggering loader-abandon event):', request.url);
             setTimeout(() => {
                 eventBus.trigger(Events.LOADING_ABANDONED, {request: request, mediaType: request.mediaType, sender: loaderInstance});
-            }, KEY_MISSING_ABANDON_TIMEOUT_MS);
+            }, request.duration * 1000); // duration of fragment in seconds
         }
     }
 
