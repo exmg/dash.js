@@ -128,16 +128,31 @@ function ExmgFragmentDecrypt(config) {
     const context = this.context;
     const keyFilesBaseUrl = Settings(context).getInstance().get().streaming.keyFilesBaseUrl;
 
-    keyIndexUpdateInterval = setInterval(() => {
-        fetchKeyIndex(keyFilesBaseUrl, 'audio').then((index) => {
-            audioKeyIndex = extractKeyIndexUrls(index);
-            fetchKeysOnIndexUpdated('audio')
-        });
-        fetchKeyIndex(keyFilesBaseUrl, 'video').then((index) => {
-            videoKeyIndex = extractKeyIndexUrls(index);
-            fetchKeysOnIndexUpdated('video')
-        });
-    }, keyIndexUpdateMs)
+    let refCount = 0;
+
+    function init() {
+        refCount++;
+
+        if (keyIndexUpdateInterval !== null) return;
+
+        keyIndexUpdateInterval = setInterval(() => {
+            fetchKeyIndex(keyFilesBaseUrl, 'audio').then((index) => {
+                audioKeyIndex = extractKeyIndexUrls(index);
+                fetchKeysOnIndexUpdated('audio')
+            });
+            fetchKeyIndex(keyFilesBaseUrl, 'video').then((index) => {
+                videoKeyIndex = extractKeyIndexUrls(index);
+                fetchKeysOnIndexUpdated('video')
+            });
+        }, keyIndexUpdateMs);
+    }
+
+    function deinit() {
+        refCount--;
+        if (refCount > 0) return;
+        clearInterval(keyIndexUpdateInterval);
+        keyIndexUpdateInterval = null;
+    }
 
     /**
      *
@@ -145,45 +160,37 @@ function ExmgFragmentDecrypt(config) {
      * @returns {Array<string>}
      */
     function extractKeyIndexUrls(keyIndexData) {
-        const keyIndexList = keyIndexData.split('\n');
-        keyIndexList = keyIndexList.map((url) => url.substr(url.lastIndexOf('/') + 1))
-                                .filter((url) => !!url.length);
-        return keyIndexList;
+        return keyIndexData.split('\n')
+                    .map((url) => url.substr(url.lastIndexOf('/') + 1))
+                    .filter((url) => !!url.length);
+    }
+
+    function fetchAndMapKeys(index, keyMap) {
+        index.forEach((url) => {
+            if (keyMap[url]) {
+                return;
+            }
+            keyMap[url] = true; // mark as requested
+            fetchKeyMessageUrl(keyFilesBaseUrl + '/' + url)
+                .then((message) => {
+                    keyMap[url] = message; // store result
+                    onCipherMessage(message);
+                })
+                .catch((err) => {
+                    keyMap[url] = false; // mark as failed
+                    console.warn('Failure to retrieve key!')
+                    console.error(err);
+                });
+        });
     }
 
     function fetchKeysOnIndexUpdated(codecType) {
         switch (codecType) {
         case 'audio':
-            audioKeyIndex.forEach((url) => {
-                if (!audioKeyMap[url]) {
-                    audioKeyMap[url] = true;
-                    fetchKeyMessageUrl(keyFilesBaseUrl + url)
-                        .then((message) => {
-                            audioKeyMap[url] = message;
-                            onCipherMessage(message);
-                        })
-                        .catch((err) => {
-                            console.warn('Failure to retrieve key (no retrial)!')
-                            console.error(err);
-                        });
-                }
-            })
+            fetchAndMapKeys(audioKeyIndex, audioKeyMap);
             break;
         case 'video':
-            videoKeyIndex.forEach((url) => {
-                if (!videoKeyMap[url]) {
-                    videoKeyMap[url] = true;
-                    fetchKeyMessageUrl(keyFilesBaseUrl + url)
-                        .then((message) => {
-                            videoKeyMap[url] = message;
-                            onCipherMessage(message);
-                        })
-                        .catch((err) => {
-                            console.warn('Failure to retrieve key (no retrial)!')
-                            console.error(err);
-                        });
-                }
-            })
+            fetchAndMapKeys(videoKeyIndex, videoKeyMap);
             break;
         }
     }
@@ -409,6 +416,7 @@ function ExmgFragmentDecrypt(config) {
         return matchMsg;
     }
 
+    /*
     function createMqttSubscribeClient(onMessage) {
 
         if (clientCreated) {
@@ -453,10 +461,12 @@ function ExmgFragmentDecrypt(config) {
     function disposeMqttSubClient() {
 
     }
+    */
 
     instance = {
-        mqttClient,
-        digestFragmentBuffer
+        digestFragmentBuffer,
+        init,
+        deinit
     };
 
     return instance;
