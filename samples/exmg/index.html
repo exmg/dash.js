@@ -35,8 +35,11 @@
                     }, 
                     streaming: {
                         //lowLatencyEnabled: true,
-                        liveDelay: 0,
-                        keyFilesBaseUrl: "http://10.211.55.6:8080"
+                        liveDelay: 10,
+                        exmg: {
+                            keyFilesBaseUrl: "http://10.211.55.6:8080",
+                            keyUpdateIntervalMs: 2000
+                        }
                     },
                 });
 
