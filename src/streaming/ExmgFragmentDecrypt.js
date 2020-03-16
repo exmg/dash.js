@@ -109,10 +109,12 @@ function ExmgFragmentDecrypt(config) {
 
     config = config || {};
 
-    let instance;
     //let clientCreated = false;
     //let mqttClient = null; //mqttClient = createMqttSubscribeClient(onCipherMessage);
+    let instance;
+    let keyFilesBaseUrl;
     let keyIndexUpdateInterval = null;
+    let keyUpdateIntervalMs;
     let audioKeyIndex = null;
     let videoKeyIndex = null;
     const audioKeyMap = {}
@@ -123,27 +125,26 @@ function ExmgFragmentDecrypt(config) {
     const cipherMessageHash = {};
     const movInitDataHash = {};
     const perf = window.performance;
-    const keyIndexUpdateMs = KEY_UPDATE_INTERVAL_MS;
     const context = this.context;
-    const keyFilesBaseUrl = Settings(context).getInstance().get().streaming.keyFilesBaseUrl;
 
     let refCount = 0;
 
     function init() {
         refCount++;
 
-        if (keyIndexUpdateInterval !== null) return;
+        if (keyIndexUpdateInterval !== null) return; // singleton, we only do this once!
 
-        keyIndexUpdateInterval = setInterval(() => {
-            fetchKeyIndex(keyFilesBaseUrl, 'audio').then((index) => {
-                audioKeyIndex = extractKeyIndexUrls(index);
-                fetchKeysOnIndexUpdated('audio')
-            });
-            fetchKeyIndex(keyFilesBaseUrl, 'video').then((index) => {
-                videoKeyIndex = extractKeyIndexUrls(index);
-                fetchKeysOnIndexUpdated('video')
-            });
-        }, keyIndexUpdateMs);
+        keyFilesBaseUrl
+            = Settings(context).getInstance().get().streaming.exmg.keyFilesBaseUrl;
+        if (!keyFilesBaseUrl) {
+            throw new Error('Need `streaming.exmg.keyFilesBaseUrl` property in settings!');
+        }
+
+        keyUpdateIntervalMs
+            = Settings(context).getInstance().get().streaming.exmg.keyUpdateIntervalMs;
+
+        keyIndexUpdateInterval = setInterval(updateKeys, keyUpdateIntervalMs);
+        updateKeys(); // run once immediately on init
     }
 
     function deinit() {
@@ -151,6 +152,17 @@ function ExmgFragmentDecrypt(config) {
         if (refCount > 0) return;
         clearInterval(keyIndexUpdateInterval);
         keyIndexUpdateInterval = null;
+    }
+
+    function updateKeys() {
+        fetchKeyIndex(keyFilesBaseUrl, 'audio').then((index) => {
+            audioKeyIndex = extractKeyIndexUrls(index);
+            fetchKeysOnIndexUpdated('audio')
+        });
+        fetchKeyIndex(keyFilesBaseUrl, 'video').then((index) => {
+            videoKeyIndex = extractKeyIndexUrls(index);
+            fetchKeysOnIndexUpdated('video')
+        });
     }
 
     /**
