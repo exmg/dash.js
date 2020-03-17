@@ -1,6 +1,5 @@
 import ISOBoxer from 'codem-isoboxer';
 import FactoryMaker from '../core/FactoryMaker';
-import EventBus from '../core/EventBus';
 import Events from '../core/events/Events';
 import Settings from './../core/Settings';
 
@@ -173,12 +172,17 @@ function ExmgFragmentDecrypt(config) {
      * @returns {Array<string>}
      */
     function extractKeyIndexUrls(keyIndexData) {
+        if (!keyIndexData) {
+            console.error('No key index data received');
+            return;
+        }
         return keyIndexData.split('\n')
                     .map((url) => url.substr(url.lastIndexOf('/') + 1))
                     .filter((url) => !!url.length);
     }
 
     function fetchAndMapKeys(index, keyMap) {
+        if (!index) return;
         index.forEach((url) => {
             if (keyMap[url]) {
                 return;
