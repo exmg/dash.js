@@ -19,7 +19,7 @@
         </p>
 
         <script>
-            var url = `http://10.211.55.6:8080/out.mpd`;
+            var url = `http://localhost:8080/out.mpd`;
             var video = document.querySelector("#videoPlayer");
             var player = null;
 
@@ -37,7 +37,7 @@
                         //lowLatencyEnabled: true,
                         liveDelay: 10,
                         exmg: {
-                            keyFilesBaseUrl: "http://10.211.55.6:8080",
+                            keyFilesBaseUrl: "http://localhost:8080",
                             keyUpdateIntervalMs: 2000
                         }
                     },
