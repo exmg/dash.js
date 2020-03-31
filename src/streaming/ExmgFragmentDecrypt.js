@@ -18,10 +18,14 @@ const DEBUG = true;
 /**
  * @param {Uint8Array} cipherData Encrypted data buffer
  * @param {Uint8Array} key 16-bytes (128 bits) key
- * @param {Uint8Array} iv 8 bytes (64 bits) IV
+ * @param {Uint8Array} iv 8 bytes (64 bits) IV zero-padded in start of 16-bytes buffer
  * @returns {Promise<Uint8Array>}
  */
-function decryptAesCtr(cipherData, key, iv) {
+function decryptBufferFromAesCtr(cipherData, key, iv) {
+
+    if (key.byteLength !== 16) throw new Error('Key must be 128 bits');
+    if (iv.byteLength !== 16) throw new Error('8-bytes IV must be padded in 128 bits CTR data');
+
     const crypto = window.crypto;
     if (!crypto || !crypto.subtle) {
         throw new Error('WebCrypto (Subtle) API not available');
@@ -43,10 +47,10 @@ function decryptAesCtr(cipherData, key, iv) {
             keyObj,
             cipherData
         )
-        .then(function(clearData){
+        .then((clearData) => {
             return new Uint8Array(clearData);
         })
-        .catch(function(err){
+        .catch((err) => {
             console.error('Error decrypting AES-CTR cipherdata: ' + err.message);
         });
     });
@@ -271,7 +275,7 @@ function ExmgFragmentDecrypt(config) {
 
     /**
      *
-     * @param {Uint8Array} data Fragment data loaded completely
+     * @param {ArrayBuffer} data Fragment data loaded completely
      * @param {*} request Handle to dash.js loader request
      * @param {(Uint8Array) => void} onResult Loader "report" callback for this request
      * @param {FragmentLoader} loader Loader instance
@@ -358,6 +362,13 @@ function ExmgFragmentDecrypt(config) {
         }
     }
 
+    /**
+     *
+     * @param {ArrayBuffer} data
+     * @param {*} parsedFile
+     * @param {*} mediaType
+     * @param {*} onResult
+     */
     function decryptFragmentBuffer(data, parsedFile, mediaType, onResult) {
         const now = perf.now();
 
@@ -382,25 +393,49 @@ function ExmgFragmentDecrypt(config) {
             const cipherMessageForBuffer = findCipherMessageByMediaTime(firstPtsSeconds, trackInfo.id, trackInfo.type);
 
             // create full key data from short keys
-            const keyShort = new Uint32Array([cipherMessageForBuffer.key]);
-            const ivShort = new Uint16Array([cipherMessageForBuffer.iv]);
-            const key = new Uint8Array(16);
-            const iv = new Uint8Array(16);
+
+            const keyParsed = parseInt(cipherMessageForBuffer.key);
+            const ivParsed = parseInt(cipherMessageForBuffer.iv);
+            if (keyParsed === NaN || ivParsed === NaN) {
+                throw new Error('Key or IV have wrong format (should be serialized as integer numbers)');
+            }
+
+            const keyShort = new Uint32Array([keyParsed]);
+            const ivShort = new Uint32Array([ivParsed]);
+
+            let key = new Uint32Array(4); // 16bytes = 128bit key
+            let iv = new Uint32Array(4); // IV is 8 bytes itself, but counter (AES-CTR) or "full IV" is same size as key zero-padded
 
             key.set(keyShort, 0);
             iv.set(ivShort, 0);
 
+            key = new Uint8Array(key.buffer);
+            iv = new Uint8Array(iv.buffer);
+
             // decrypt the mdat buffer
             const mdat = mdats[index];
-            clearBufferPromises.push(decryptAesCtr(mdat.data, key, iv));
+            clearBufferPromises.push(decryptBufferFromAesCtr(mdat.data, key, iv));
         }
 
         // awaiting all decrypt promise results ...
         Promise.all(clearBufferPromises).then((clearBuffers) => {
+
+            const digestDataBuffer = new Uint8Array(data);
+
             const decryptTimeMs = perf.now() - now;
             console.log(`Decrypted ${clearBuffers.length} fragment buffers in ${decryptTimeMs.toFixed(3)} ms`);
-            // TODO: write results back into original downloaded segment data here
-            onResult(data);
+
+            clearBuffers.forEach((clearMdatContent, index) => {
+                console.log('Copying back into digest data clear bytes:', clearMdatContent.byteLength, mdats[index].size - 8);
+                console.log(digestDataBuffer)
+                const offset = mdats[index]._offset + 8;
+                console.log('Computed mdat data offset:', offset);
+                digestDataBuffer.set(clearMdatContent, offset)
+            })
+
+            console.log(ISOBoxer.parseBuffer(digestDataBuffer.buffer));
+
+            onResult(digestDataBuffer.buffer);
         });
     }
 
