@@ -403,14 +403,20 @@ function ExmgFragmentDecrypt(config) {
             const keyShort = new Uint32Array([keyParsed]);
             const ivShort = new Uint32Array([ivParsed]);
 
-            let key = new Uint32Array(4); // 16bytes = 128bit key
-            let iv = new Uint32Array(4); // IV is 8 bytes itself, but counter (AES-CTR) or "full IV" is same size as key zero-padded
+            console.log('Short key/IV:',
+                cipherMessageForBuffer.key, keyShort,
+                cipherMessageForBuffer.iv, ivShort);
 
-            key.set(keyShort, 0);
-            iv.set(ivShort, 0);
+            const key = new Uint8Array(16); // 16bytes = 128bit key
+            const iv = new Uint8Array(16); // IV is 8 bytes itself, but counter (AES-CTR) or "full IV" is same size as key zero-padded
 
-            key = new Uint8Array(key.buffer);
-            iv = new Uint8Array(iv.buffer);
+            const keyView = new DataView(key.buffer);
+            const ivView = new DataView(iv.buffer);
+
+            keyView.setUint32(0, keyParsed, true);
+            ivView.setUint32(0, ivParsed, true);
+
+            console.log('Key/IV:', key, iv)
 
             // decrypt the mdat buffer
             const mdat = mdats[index];
@@ -419,22 +425,17 @@ function ExmgFragmentDecrypt(config) {
 
         // awaiting all decrypt promise results ...
         Promise.all(clearBufferPromises).then((clearBuffers) => {
-
             const digestDataBuffer = new Uint8Array(data);
-
             const decryptTimeMs = perf.now() - now;
             console.log(`Decrypted ${clearBuffers.length} fragment buffers in ${decryptTimeMs.toFixed(3)} ms`);
-
-            clearBuffers.forEach((clearMdatContent, index) => {
-                console.log('Copying back into digest data clear bytes:', clearMdatContent.byteLength, mdats[index].size - 8);
-                console.log(digestDataBuffer)
-                const offset = mdats[index]._offset + 8;
-                console.log('Computed mdat data offset:', offset);
-                digestDataBuffer.set(clearMdatContent, offset)
-            })
-
-            console.log(ISOBoxer.parseBuffer(digestDataBuffer.buffer));
-
+            clearBuffers.forEach((clearMdatPayload, index) => {
+                console.log('Copying back into digest data clear bytes:', clearMdatPayload.byteLength, mdats[index].size - 8);
+                //console.log(digestDataBuffer)
+                //console.log('Computed mdat data offset:', offset);
+                const mdatDataOffset = mdats[index]._offset + 8;
+                digestDataBuffer.set(clearMdatPayload, mdatDataOffset)
+            });
+            //console.log(ISOBoxer.parseBuffer(digestDataBuffer.buffer));
             onResult(digestDataBuffer.buffer);
         });
     }
