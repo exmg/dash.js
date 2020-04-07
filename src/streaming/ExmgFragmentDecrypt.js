@@ -327,8 +327,6 @@ function ExmgFragmentDecrypt(config) {
             return;
         }
 
-        const keyMessages = [];
-
         let isKeyMissing = false;
 
         for (let index = 0; index < trafs.length; index++) {
@@ -344,12 +342,10 @@ function ExmgFragmentDecrypt(config) {
 
             // lookup key
             const cipherMessageForBuffer = findCipherMessageByMediaTime(firstPts, trackInfo.id, trackInfo.type);
-
             if (!cipherMessageForBuffer) {
                 isKeyMissing = true;
                 break;
             }
-            keyMessages.push(cipherMessageForBuffer);
         }
 
         if (!isKeyMissing) {
@@ -388,9 +384,8 @@ function ExmgFragmentDecrypt(config) {
             const trackId = tfhd.track_ID;
             const firstPts = tfdt.baseMediaDecodeTime;
             const trackInfo = movInitDataHash[makeSegmentTypeHashkey(mediaType, trackId)];
-            const firstPtsSeconds = firstPts / trackInfo.timescale;
 
-            const cipherMessageForBuffer = findCipherMessageByMediaTime(firstPtsSeconds, trackInfo.id, trackInfo.type);
+            const cipherMessageForBuffer = findCipherMessageByMediaTime(firstPts, trackInfo.id, trackInfo.type);
 
             // create full key data from short keys
 
@@ -466,6 +461,7 @@ function ExmgFragmentDecrypt(config) {
         if (!matchMsg) {
             //console.warn('key not found for fragment')
         }
+        console.log('Found matching key for lookup-PTS:', firstPts, ', type:', trackType, ', message-data:', matchMsg);
         return matchMsg;
     }
 
