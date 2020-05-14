@@ -12,8 +12,8 @@ const MQTT_TOPIC = 'joep/test';
 const MQTT_CLIENT_ID = 'web1';
 //*/
 
-const KEY_UPDATE_INTERVAL_MS = 2000;
-const DEBUG = true;
+const DEBUG = false;
+const log = DEBUG ? console.log : () => void 0;
 
 /**
  * @param {Uint8Array} cipherData Encrypted data buffer
@@ -76,7 +76,7 @@ function fetchKeyMessageUrl(url) {
                     reject(null);
                     return;
                 }
-                //console.log('Received messsage:', JSON.parse(message));
+                //log('Received messsage:', JSON.parse(message));
                 resolve(message);
             })
             .catch((err) => {
@@ -256,7 +256,7 @@ function ExmgFragmentDecrypt(config) {
                     messageObj.fragment_info.codec_type
                 );
 
-            console.log('Received key for', codecType, 'media-time scope:', messageObj.fragment_info.media_time_secs);
+            log('Received key for', codecType, 'media-time scope:', messageObj.fragment_info.media_time_secs);
 
             cipherMessages.push(messageObj);
 
@@ -398,7 +398,7 @@ function ExmgFragmentDecrypt(config) {
             const keyShort = new Uint32Array([keyParsed]);
             const ivShort = new Uint32Array([ivParsed]);
 
-            console.log('Short key/IV:',
+            log('Short key/IV:',
                 cipherMessageForBuffer.key, keyShort,
                 cipherMessageForBuffer.iv, ivShort);
 
@@ -411,7 +411,7 @@ function ExmgFragmentDecrypt(config) {
             keyView.setUint32(0, keyParsed, true);
             ivView.setUint32(0, ivParsed, true);
 
-            console.log('Key/IV:', key, iv)
+            log('Key/IV:', key, iv)
 
             // decrypt the mdat buffer
             const mdat = mdats[index];
@@ -422,15 +422,15 @@ function ExmgFragmentDecrypt(config) {
         Promise.all(clearBufferPromises).then((clearBuffers) => {
             const digestDataBuffer = new Uint8Array(data);
             const decryptTimeMs = perf.now() - now;
-            console.log(`Decrypted ${clearBuffers.length} fragment buffers in ${decryptTimeMs.toFixed(3)} ms`);
+            log(`Decrypted ${clearBuffers.length} fragment buffers in ${decryptTimeMs.toFixed(3)} ms`);
             clearBuffers.forEach((clearMdatPayload, index) => {
-                console.log('Copying back into digest data clear bytes:', clearMdatPayload.byteLength, mdats[index].size - 8);
-                //console.log(digestDataBuffer)
-                //console.log('Computed mdat data offset:', offset);
+                log('Copying back into digest data clear bytes:', clearMdatPayload.byteLength, mdats[index].size - 8);
+                //log(digestDataBuffer)
+                //log('Computed mdat data offset:', offset);
                 const mdatDataOffset = mdats[index]._offset + 8;
                 digestDataBuffer.set(clearMdatPayload, mdatDataOffset)
             });
-            //console.log(ISOBoxer.parseBuffer(digestDataBuffer.buffer));
+            //log(ISOBoxer.parseBuffer(digestDataBuffer.buffer));
             onResult(digestDataBuffer.buffer);
         });
     }
@@ -461,7 +461,7 @@ function ExmgFragmentDecrypt(config) {
         if (!matchMsg) {
             //console.warn('key not found for fragment')
         }
-        console.log('Found matching key for lookup-PTS:', firstPts, ', type:', trackType, ', message-data:', matchMsg);
+        log('Found matching key for lookup-PTS:', firstPts, ', type:', trackType, ', message-data:', matchMsg);
         return matchMsg;
     }
 
