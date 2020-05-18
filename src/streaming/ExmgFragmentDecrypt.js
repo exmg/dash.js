@@ -322,7 +322,6 @@ function ExmgFragmentDecrypt(config) {
         if (trafs.length === 0) {
             console.warn('Media segment was not init data but has no track fragments');
             console.debug(parsedFile);
-            if (DEBUG) debugger;
             onResult(data);
             return;
         }
@@ -351,7 +350,8 @@ function ExmgFragmentDecrypt(config) {
         if (!isKeyMissing) {
             decryptFragmentBuffer(data, parsedFile, mediaType, onResult);
         } else {
-            console.warn('Missing key-message for', request.mediaType,'fragment (triggering loader-abandon event):', request.url);
+            const alertMsg = `Missing key-message for ${request.mediaType} fragment (triggering loader-abandon event): ${request.url}`;
+            console.warn(alertMsg);
             setTimeout(() => {
                 eventBus.trigger(Events.LOADING_ABANDONED, {request: request, mediaType: request.mediaType, sender: loaderInstance});
             }, request.duration * 1000); // duration of fragment in seconds
@@ -459,9 +459,11 @@ function ExmgFragmentDecrypt(config) {
             }
         }
         if (!matchMsg) {
-            //console.warn('key not found for fragment')
+            console.warn('NOT-FOUND matching key for lookup-PTS:', firstPts, ', type:', trackType);
+            //console.debug(JSON.stringify(cipherMessages));
+        } else {
+            log('FOUND matching key for lookup-PTS:', firstPts, ', type:', trackType, ', message-data:', matchMsg);
         }
-        log('Found matching key for lookup-PTS:', firstPts, ', type:', trackType, ', message-data:', matchMsg);
         return matchMsg;
     }
 
