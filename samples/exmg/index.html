@@ -18,6 +18,14 @@
             <button onclick="go()">Go</button>
         </p>
 
+        <p>
+            <label>EXMG live-cipher sync (audio):</label>
+            <output id="key-range-audio-out"></output>
+            <br>
+            <label>EXMG live-cipher sync (video):</label>
+            <output id="key-range-video-out"></output>
+        </p>
+
         <script>
             var url = `http://localhost:8080/out.mpd`;
             var video = document.querySelector("#videoPlayer");
@@ -34,7 +42,7 @@
                         //logLevel: dashjs.Debug.LOG_LEVEL_DEBUG 
                     }, 
                     streaming: {
-                        //liveDelay: 10,
+                        liveDelay: 0,
                         //lowLatencyEnabled: true,
                         exmg: {
                             keyFilesBaseUrl: "http://localhost:8080",
@@ -47,8 +55,23 @@
 
                 player.on('fragmentLoadingStarted', () => {
                     if (window.exmgEvents) return;
+
+                    let keyRangeMaxSecs = [0, 0]
+
                     window.exmgFragmentDecrypt.eventBus.on('exmgLiveSyncCipherMessage', (event) => {
                         console.log('exmgLiveSyncCipherMessage:', event)
+
+                        let mediaType;
+                        if (event.mediaType === 'audio') {
+                            mediaType = 0;
+                        } else if (event.mediaType === 'video') {
+                            mediaType = 1;
+                        }
+
+                        let keyRangeSecs = event.mediaTimeSecs + event.keyDurationSecs;
+                        keyRangeMaxSecs[mediaType] = Math.max(keyRangeMaxSecs[mediaType], keyRangeSecs);
+                        document.querySelector(`#key-range-${event.mediaType}-out`).value = keyRangeMaxSecs[mediaType];
+
                     });
                     window.exmgFragmentDecrypt.eventBus.on('exmgLiveSyncCipherMiss', (event) => {
                         console.log('exmgLiveSyncCipherMiss:', event)
