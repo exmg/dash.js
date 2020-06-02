@@ -350,7 +350,7 @@ function ExmgFragmentDecrypt(config) {
         if (!isKeyMissing) {
             decryptFragmentBuffer(data, parsedFile, mediaType, onResult);
         } else {
-            const alertMsg = `Missing key-message for ${request.mediaType} fragment (triggering loader-abandon event): ${request.url}`;
+            const alertMsg = `Missing cipher-info for ${request.mediaType} segment (triggering RETRY via 'LOADING_ABANDONED'): ${request.url}`;
             console.warn(alertMsg);
             setTimeout(() => {
                 eventBus.trigger(Events.LOADING_ABANDONED, {request: request, mediaType: request.mediaType, sender: loaderInstance});
@@ -455,14 +455,15 @@ function ExmgFragmentDecrypt(config) {
                     break;
                 }
             } catch(err) {
-                console.error('Error accessing key-message data:', err.message);
+                console.error('Error accessing cipher-message data:', err.message);
             }
         }
         if (!matchMsg) {
-            console.warn('NOT-FOUND matching key for lookup-PTS:', firstPts, ', type:', trackType);
+            console.warn('NOT-FOUND matching cipher-message for lookup-PTS:', firstPts, '| type:', trackType);
             //console.debug(JSON.stringify(cipherMessages));
         } else {
-            log('FOUND matching key for lookup-PTS:', firstPts, ', type:', trackType, ', message-data:', matchMsg);
+            console.info('FOUND matching cipher-message for lookup-PTS:', firstPts, '| type:', trackType, '| key:', matchMsg.key);
+            log(matchMsg);
         }
         return matchMsg;
     }
