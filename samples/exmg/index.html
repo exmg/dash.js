@@ -45,6 +45,23 @@
 
                 player.initialize(video, url, true);
 
+                player.on('fragmentLoadingStarted', () => {
+                    if (window.exmgEvents) return;
+                    window.exmgFragmentDecrypt.eventBus.on('exmgLiveSyncCipherMessage', (event) => {
+                        console.log('exmgLiveSyncCipherMessage:', event)
+                    });
+                    window.exmgFragmentDecrypt.eventBus.on('exmgLiveSyncCipherMiss', (event) => {
+                        console.log('exmgLiveSyncCipherMiss:', event)
+                    });
+                    window.exmgFragmentDecrypt.eventBus.on('exmgLiveSyncCipherDecrypting', (event) => {
+                        console.log('exmgLiveSyncCipherDecrypting:', event)
+                    });
+                    window.exmgFragmentDecrypt.eventBus.on('exmgLiveSyncCipherDecrypted', (event) => {
+                        console.log('exmgLiveSyncCipherDecrypted:', event)
+                    });
+                    window.exmgEvents = true;
+                });
+
                 video.play();
             }
         </script>

@@ -1,6 +1,7 @@
 import ISOBoxer from 'codem-isoboxer';
 import FactoryMaker from '../core/FactoryMaker';
 import Events from '../core/events/Events';
+import EventBus from './../core/EventBus';
 import Settings from './../core/Settings';
 
 ExmgFragmentDecrypt.__dashjs_factory_name = 'ExmgFragmentDecrypt';
@@ -109,6 +110,10 @@ function fetchKeyIndex(keyFilesBaseUrl, codecType, retries = 3) {
 }
 
 function ExmgFragmentDecrypt(config) {
+
+    console.info('Creating ExmgFragmentDecrypt instance');
+
+    const _eventBus = EventBus(context).getInstance();
 
     config = config || {};
 
@@ -247,8 +252,9 @@ function ExmgFragmentDecrypt(config) {
         try {
 
             const trackId = messageObj.fragment_info.track_id;
-            const codecType = messageObj.fragment_info.codec_type;
+            const mediaType = messageObj.fragment_info.codec_type;
             const mediaTimeSecs = messageObj.fragment_info.media_time_secs;
+            const keyDurationSecs = messageObj.fragment_info.duration / messageObj.fragment_info.timescale;
 
             const cipherMessages
                 = getOrCreateCipherMessagesForTrackId(
@@ -256,12 +262,14 @@ function ExmgFragmentDecrypt(config) {
                     messageObj.fragment_info.codec_type
                 );
 
-            log('Received key for', codecType, 'media-time scope:', messageObj.fragment_info.media_time_secs);
+            log('Received key for', mediaType, 'media-time scope:', messageObj.fragment_info.media_time_secs);
 
             cipherMessages.push(messageObj);
 
+            _eventBus.trigger(Events.EXMG_LIVE_SYNC_CIPHER_MESSAGE, {trackId, mediaType, mediaTimeSecs, keyDurationSecs});
+
             if (cipherMessages.length === 1) {
-                console.info(`Received very first cipher message for track ${codecType}_${trackId} at ${mediaTimeSecs} secs`);
+                console.debug(`Received very first cipher message for track ${mediaType}_${trackId} at ${mediaTimeSecs} secs`);
             }
 
         } catch(err) {
@@ -348,12 +356,19 @@ function ExmgFragmentDecrypt(config) {
         }
 
         if (!isKeyMissing) {
-            decryptFragmentBuffer(data, parsedFile, mediaType, onResult);
+
+            _eventBus.trigger(Events.EXMG_LIVE_SYNC_CIPHER_DECRYPTING, {mediaType, url: request.url});
+
+            decryptFragmentBuffer(data, parsedFile, mediaType, request.url, onResult);
+
         } else {
             const alertMsg = `Missing cipher-info for ${request.mediaType} segment (triggering RETRY via 'LOADING_ABANDONED'): ${request.url}`;
             console.warn(alertMsg);
+
+            _eventBus.trigger(Events.EXMG_LIVE_SYNC_CIPHER_MISS, {mediaType, url: request.url});
+
             setTimeout(() => {
-                eventBus.trigger(Events.LOADING_ABANDONED, {request: request, mediaType: request.mediaType, sender: loaderInstance});
+                eventBus.trigger(Events.LOADING_ABANDONED, {request, mediaType, sender: loaderInstance});
             }, request.duration * 1000); // duration of fragment in seconds
         }
     }
@@ -361,11 +376,12 @@ function ExmgFragmentDecrypt(config) {
     /**
      *
      * @param {ArrayBuffer} data
-     * @param {*} parsedFile
-     * @param {*} mediaType
-     * @param {*} onResult
+     * @param {ISOBoxerFile} parsedFile
+     * @param {string} mediaType
+     * @param {string} url
+     * @param {Function} onResult
      */
-    function decryptFragmentBuffer(data, parsedFile, mediaType, onResult) {
+    function decryptFragmentBuffer(data, parsedFile, mediaType, url, onResult) {
         const now = perf.now();
 
         // retrieve all trafs & mdats, lookup key-message by baseMediaDecodeTime
@@ -432,6 +448,8 @@ function ExmgFragmentDecrypt(config) {
             });
             //log(ISOBoxer.parseBuffer(digestDataBuffer.buffer));
             onResult(digestDataBuffer.buffer);
+
+            _eventBus.trigger(Events.EXMG_LIVE_SYNC_CIPHER_DECRYPTED, {mediaType, url});
         });
     }
 
@@ -462,7 +480,7 @@ function ExmgFragmentDecrypt(config) {
             console.warn('NOT-FOUND matching cipher-message for lookup-PTS:', firstPts, '| type:', trackType);
             //console.debug(JSON.stringify(cipherMessages));
         } else {
-            console.info('FOUND matching cipher-message for lookup-PTS:', firstPts, '| type:', trackType, '| key:', matchMsg.key);
+            console.debug('FOUND matching cipher-message for lookup-PTS:', firstPts, '| type:', trackType, '| key:', matchMsg.key);
             log(matchMsg);
         }
         return matchMsg;
@@ -518,8 +536,11 @@ function ExmgFragmentDecrypt(config) {
     instance = {
         digestFragmentBuffer,
         init,
-        deinit
+        deinit,
+        eventBus: _eventBus
     };
+
+    window.exmgFragmentDecrypt = instance;
 
     return instance;
 }

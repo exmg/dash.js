@@ -78,6 +78,11 @@ class CoreEvents extends EventsBase {
         this.WALLCLOCK_TIME_UPDATED = 'wallclockTimeUpdated';
         this.XLINK_ELEMENT_LOADED = 'xlinkElementLoaded';
         this.XLINK_READY = 'xlinkReady';
+
+        this.EXMG_LIVE_SYNC_CIPHER_MESSAGE = 'exmgLiveSyncCipherMessage';
+        this.EXMG_LIVE_SYNC_CIPHER_MISS = 'exmgLiveSyncCipherMiss';
+        this.EXMG_LIVE_SYNC_CIPHER_DECRYPTING = 'exmgLiveSyncCipherDecrypting';
+        this.EXMG_LIVE_SYNC_CIPHER_DECRYPTED = 'exmgLiveSyncCipherDecrypted';
     }
 }
 
