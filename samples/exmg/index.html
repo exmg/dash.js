@@ -18,12 +18,15 @@
             <button onclick="go()">Go</button>
         </p>
 
-        <p>
+        <p style="text-align: left; width: 60%; margin: auto;">
             <label>EXMG live-cipher sync (audio):</label>
             <output id="key-range-audio-out"></output>
             <br>
             <label>EXMG live-cipher sync (video):</label>
             <output id="key-range-video-out"></output>
+            <br>
+            <label>Buffered (decrypted/decode&renderable) time-range:</label>
+            <output id="buffered-range-out"></output>
         </p>
 
         <script>
@@ -83,6 +86,16 @@
                         console.log('exmgLiveSyncCipherDecrypted:', event)
                     });
                     window.exmgEvents = true;
+
+                    setInterval(() => {
+
+                        //console.log(video.buffered)
+
+                        const rangesLen = video.buffered.length
+                        document.querySelector('#buffered-range-out').value 
+                            = '[' + video.buffered.start(rangesLen - 1) + ', ' + video.buffered.end(rangesLen - 1) + ']';
+
+                    }, 1000)
                 });
 
                 video.play();
