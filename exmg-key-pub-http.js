@@ -93,7 +93,7 @@ function scanAndPublish() {
 
     return getDirFilesListing(dirPath).then((files) => {
 
-        console.log('Scanned files in dir:', files)
+        //console.log('Scanned files in dir:', files)
 
         // Exclude all files that have a PUB_LOCK_FILE_EXT
         // and add the prequel to the current lock-set,
@@ -135,12 +135,12 @@ function scanAndPublish() {
                         throw new Error(`HTTP-response status: ${res.statusMessage} (${res.statusCode}) (${remoteFilePath})`);
                     }
                 })
-                .then(() => writeLockFile(path.resolve(dirPath, filename)))
+                .then(() => filename.endsWith('.json') && writeLockFile(path.resolve(dirPath, filename)))
         }))
     })
 }
 
-(function main() {
+function main() {
 
     /*
     let idle = true;
@@ -167,4 +167,6 @@ function scanAndPublish() {
         process.exit(1);
     })
 
-})();
+}
+
+setInterval(main, 500);
