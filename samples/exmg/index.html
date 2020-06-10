@@ -34,7 +34,7 @@
 
             const streamId = 664379;
             const eventName = 'stephan';
-            const subDir = 1591795997
+            const subDir = 1591797703
 
             var url = `https://exmachina-ull-demo.akamaized.net/cmaf/live/${streamId}/${eventName}/out.mpd`
 
@@ -99,9 +99,10 @@
                         //console.log(video.buffered)
 
                         const rangesLen = video.buffered.length
+                        if (!rangesLen) return;
                         document.querySelector('#buffered-range-out').value 
                             = '[' + video.buffered.start(rangesLen - 1) + ', ' + video.buffered.end(rangesLen - 1) + ']' 
-                                + video.buffered.end(rangesLen - 1) - video.currentTime;
+                               // + video.buffered.end(rangesLen - 1) - video.currentTime;
 
                     }, 1000)
                 });
