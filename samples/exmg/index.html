@@ -34,9 +34,11 @@
 
             const streamId = 664379;
             const eventName = 'stephan';
-            const subDir = 1591797703
+            const subDir = 1591799184
 
             var url = `https://exmachina-ull-demo.akamaized.net/cmaf/live/${streamId}/${eventName}/out.mpd`
+
+            const keyHost = '46.226.109.109:3002'
 
             var video = document.querySelector("#videoPlayer");
             var player = null;
@@ -55,7 +57,7 @@
                         liveDelay: 0,
                         //lowLatencyEnabled: true,
                         exmg: {
-                            keyFilesBaseUrl: `http://localhost:3002/cmaf/${streamId}/${eventName}/${subDir}`,
+                            keyFilesBaseUrl: `http://${keyHost}/cmaf/${streamId}/${eventName}/${subDir}`,
                             keyUpdateIntervalMs: 1000
                         }
                     },

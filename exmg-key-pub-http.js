@@ -17,7 +17,8 @@ const remoteBasePath = `/cmaf/${remoteStreamId}/${remoteEventName}/`;
 */
 
 const remotePort = 3002;
-const remoteHost = `localhost`;
+//const remoteHost = `localhost`;
+const remoteHost = '46.226.109.109';
 const remoteBasePath = `/cmaf/${remoteStreamId}/${remoteEventName}/`;
 
 const dirPath = path.resolve(process.argv[2]);
