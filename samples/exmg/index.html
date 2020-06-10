@@ -30,9 +30,13 @@
         </p>
 
         <script>
-            var url = `http://localhost:8080/out.mpd`;
+            //var url = `http://localhost:8080/out.mpd`;
 
-            url = "https://exmachina-ull-demo.akamaized.net/cmaf/live/664379/stephan/out.mpd"
+            const streamId = 664379;
+            const eventName = 'stephan';
+            const subDir = 1591795997
+
+            var url = `https://exmachina-ull-demo.akamaized.net/cmaf/live/${streamId}/${eventName}/out.mpd`
 
             var video = document.querySelector("#videoPlayer");
             var player = null;
@@ -51,8 +55,8 @@
                         liveDelay: 0,
                         //lowLatencyEnabled: true,
                         exmg: {
-                            keyFilesBaseUrl: "http://localhost:8080",
-                            keyUpdateIntervalMs: 2000
+                            keyFilesBaseUrl: `http://localhost:3002/cmaf/${streamId}/${eventName}/${subDir}`,
+                            keyUpdateIntervalMs: 1000
                         }
                     },
                 });
@@ -96,7 +100,8 @@
 
                         const rangesLen = video.buffered.length
                         document.querySelector('#buffered-range-out').value 
-                            = '[' + video.buffered.start(rangesLen - 1) + ', ' + video.buffered.end(rangesLen - 1) + ']';
+                            = '[' + video.buffered.start(rangesLen - 1) + ', ' + video.buffered.end(rangesLen - 1) + ']' 
+                                + video.buffered.end(rangesLen - 1) - video.currentTime;
 
                     }, 1000)
                 });
