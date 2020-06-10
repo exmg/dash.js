@@ -11,7 +11,7 @@ const remoteStreamId = 664379;
 const remoteEventName = 'stephan'
 
 const remoteHost = `p-ep${remoteStreamId}.i.akamaientrypoint.net`;
-const remoteBasePath = `/cmaf/live/${remoteStreamId}/${remoteEventName}/`;
+const remoteBasePath = `/cmaf/${remoteStreamId}/${remoteEventName}/`;
 
 const dirPath = path.resolve(process.argv[2]);
 if (!dirPath) {
@@ -39,8 +39,8 @@ function doHttpPost(hostname, path, data, mimeType) {
                 'Connection': 'keep-alive',
                 'Accept': '*/*',
                 'User-Agent': 'Akamai_Broadcaster_v1.0',
-                //'Icy-MetaData': '1',
-                //'Content-Type': mimeType
+                'Icy-MetaData': '1',
+                'Content-Type': mimeType
             }
         }
     }
