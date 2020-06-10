@@ -10,7 +10,14 @@ const phin = require('phin')
 const remoteStreamId = 664379;
 const remoteEventName = 'stephan'
 
+/*
+const remotePort = 80;
 const remoteHost = `p-ep${remoteStreamId}.i.akamaientrypoint.net`;
+const remoteBasePath = `/cmaf/${remoteStreamId}/${remoteEventName}/`;
+*/
+
+const remotePort = 3002;
+const remoteHost = `localhost`;
 const remoteBasePath = `/cmaf/${remoteStreamId}/${remoteEventName}/`;
 
 const dirPath = path.resolve(process.argv[2]);
@@ -27,9 +34,9 @@ const JOB_POLL_MS = 1000;
 
 const PUB_LOCK_FILE_EXT = '.lock';
 
-function doHttpPost(hostname, path, data, mimeType) {
+function doHttpPost(hostname, port, path, data, mimeType) {
 
-    const url =  'http://' + hostname + path;
+    const url =  'http://' + hostname + ':' + port + path;
     const phinOpts = {
         url,
         method: 'POST',
@@ -119,7 +126,7 @@ function scanAndPublish() {
 
             //const mimeType = 'video/mp4';
 
-            return doHttpPost(remoteHost, remoteFilePath, buf, mimeType)
+            return doHttpPost(remoteHost, remotePort, remoteFilePath, buf, mimeType)
                 .then((res) => {
                     console.log('Done POST:', res.url)
                     console.log('Server response:', res.body.toString('utf8'))
@@ -154,7 +161,7 @@ function scanAndPublish() {
     */
 
    scanAndPublish().then(() => {
-        scanAndPublish();
+        console.log('√')
     }).catch((err) => {
         console.error('[EXMG KEY-PUB] Caught fatal:', err);
         process.exit(1);
