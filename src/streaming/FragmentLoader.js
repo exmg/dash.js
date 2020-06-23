@@ -121,7 +121,7 @@ function FragmentLoader(config) {
                 },
                 success: function (data) {
                     if (EXMG_ENABLE_CIPHER_DIGEST) {
-                        console.log('Processing via ExmgFragmentDecrypt:', request.url)
+                        console.log('Processing via ExmgFragmentDecrypt:', request.url);
                         exmgFragDecrypter.digestFragmentBuffer(data, request, report, instance, eventBus);
                     } else {
                         report(data);

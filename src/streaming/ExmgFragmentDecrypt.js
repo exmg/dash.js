@@ -43,7 +43,7 @@ function decryptBufferFromAesCtr(cipherData, key, iv) {
             {
                 name: algoId,
                 counter: iv,
-                length: 64, // we use an 8-byte IV
+                length: 64 // we use an 8-byte IV
             },
             keyObj,
             cipherData
@@ -57,61 +57,11 @@ function decryptBufferFromAesCtr(cipherData, key, iv) {
     });
 }
 
-/**
- *
- * @param {string} codecType
- * @param {number} trackId
- * @param {number} pts
- * @returns {Promise<string | null | Error>}
- */
-function fetchKeyMessage(codecType, trackId, pts) {
-    const url = keyFilesBaseUrl + `/exmg_key_${codecType}_${trackId}_${pts}.json`;
-    return fetchKeyMessageUrl(url);
-}
-
-function fetchKeyMessageUrl(url) {
-    return new Promise((resolve, reject) => {
-        fetch(url).then((res) => res.ok && res.text())
-            .then((message) => {
-                if (!message) {
-                    reject(null);
-                    return;
-                }
-                //log('Received messsage:', JSON.parse(message));
-                resolve(message);
-            })
-            .catch((err) => {
-                console.error('Fatal error fetching key-message:', err);
-                reject(err);
-            });
-    });
-}
-
-/**
- *
- * @param {string} codecType
- * @returns {Promise<string | null>}
- */
-function fetchKeyIndex(keyFilesBaseUrl, codecType, retries = 3) {
-    const url = keyFilesBaseUrl + '/exmg_key_index_' + codecType;
-    return fetch(url)
-        .then((response) => {
-            if (response.ok) {
-                return response.text();
-            } else {
-                if (retries >= 0) {
-                    console.warn('Retrial attempts for fetching key-index. Counter:', retries);
-                    return fetchKeyIndex(url, codecType, --retries);
-                } else {
-                    return null;
-                }
-            }
-        })
-}
-
 function ExmgFragmentDecrypt(config) {
 
     console.info('Creating ExmgFragmentDecrypt instance');
+
+    const context = this.context;
 
     const _eventBus = EventBus(context).getInstance();
 
@@ -122,20 +72,17 @@ function ExmgFragmentDecrypt(config) {
 
     let instance;
     let keyFilesBaseUrl;
+    let keyFilesCustomExt;
     let keyIndexUpdateInterval = null;
     let keyUpdateIntervalMs;
     let audioKeyIndex = null;
     let videoKeyIndex = null;
 
-    const audioKeyMap = {}
-    const videoKeyMap = {}
-    /**
-     * @type {[track_id] => ExmgCipherMessage[]}
-     */
+    const audioKeyMap = {};
+    const videoKeyMap = {};
     const cipherMessageHash = {};
     const movInitDataHash = {};
     const perf = window.performance;
-    const context = this.context;
 
     let refCount = 0;
 
@@ -144,16 +91,20 @@ function ExmgFragmentDecrypt(config) {
 
         if (keyIndexUpdateInterval !== null) return; // singleton, we only do this once!
 
-        keyFilesBaseUrl
-            = Settings(context).getInstance().get().streaming.exmg.keyFilesBaseUrl;
+        keyFilesBaseUrl = Settings(context).getInstance().get().streaming.exmg.keyFilesBaseUrl;
         if (!keyFilesBaseUrl) {
             throw new Error('Need `streaming.exmg.keyFilesBaseUrl` property in settings!');
         }
 
-        keyUpdateIntervalMs
-            = Settings(context).getInstance().get().streaming.exmg.keyUpdateIntervalMs;
+        keyFilesCustomExt = Settings(context).getInstance().get().streaming.exmg.keyFilesCustomExt;
+        if (!keyFilesCustomExt) {
+            keyFilesCustomExt = '';
+        }
+
+        keyUpdateIntervalMs = Settings(context).getInstance().get().streaming.exmg.keyUpdateIntervalMs;
 
         keyIndexUpdateInterval = setInterval(updateKeys, keyUpdateIntervalMs);
+
         updateKeys(); // run once immediately on init
     }
 
@@ -164,14 +115,49 @@ function ExmgFragmentDecrypt(config) {
         keyIndexUpdateInterval = null;
     }
 
+    function fetchKeyMessageUrl(url) {
+        return new Promise((resolve, reject) => {
+            fetch(url).then((res) => res.ok && res.text())
+                .then((message) => {
+                    if (!message) {
+                        reject(null);
+                        return;
+                    }
+                    //log('Received messsage:', JSON.parse(message));
+                    resolve(message);
+                })
+                .catch((err) => {
+                    console.error('Fatal error fetching key-message:', err);
+                    reject(err);
+                });
+        });
+    }
+
+    function fetchKeyIndex(keyFilesBaseUrl, codecType, retries = 3) {
+        const url = keyFilesBaseUrl + '/exmg_key_index_' + codecType + keyFilesCustomExt;
+        return fetch(url)
+            .then((response) => {
+                if (response.ok) {
+                    return response.text();
+                } else {
+                    if (retries >= 0) {
+                        console.warn('Retrial attempts for fetching key-index. Counter:', retries);
+                        return fetchKeyIndex(url, codecType, --retries);
+                    } else {
+                        return null;
+                    }
+                }
+            });
+    }
+
     function updateKeys() {
         fetchKeyIndex(keyFilesBaseUrl, 'audio').then((index) => {
             audioKeyIndex = extractKeyIndexUrls(index);
-            fetchKeysOnIndexUpdated('audio')
+            fetchKeysOnIndexUpdated('audio');
         });
         fetchKeyIndex(keyFilesBaseUrl, 'video').then((index) => {
             videoKeyIndex = extractKeyIndexUrls(index);
-            fetchKeysOnIndexUpdated('video')
+            fetchKeysOnIndexUpdated('video');
         });
     }
 
@@ -197,14 +183,14 @@ function ExmgFragmentDecrypt(config) {
                 return;
             }
             keyMap[url] = true; // mark as requested
-            fetchKeyMessageUrl(keyFilesBaseUrl + '/' + url)
+            fetchKeyMessageUrl(keyFilesBaseUrl + '/' + url + keyFilesCustomExt)
                 .then((message) => {
                     keyMap[url] = message; // store result
                     onCipherMessage(message);
                 })
                 .catch((err) => {
                     keyMap[url] = false; // mark as failed
-                    console.warn('Failure to retrieve key!')
+                    console.warn('Failure to retrieve key!');
                     console.error(err);
                 });
         });
@@ -272,7 +258,7 @@ function ExmgFragmentDecrypt(config) {
                 console.debug(`Received very first cipher message for track ${mediaType}_${trackId} at ${mediaTimeSecs} secs`);
             }
 
-        } catch(err) {
+        } catch (err) {
             console.error('Fatal error hashing received message:', err);
         }
     }
@@ -285,8 +271,9 @@ function ExmgFragmentDecrypt(config) {
      *
      * @param {ArrayBuffer} data Fragment data loaded completely
      * @param {*} request Handle to dash.js loader request
-     * @param {(Uint8Array) => void} onResult Loader "report" callback for this request
-     * @param {FragmentLoader} loader Loader instance
+     * @param {Function} onResult Loader "report" callback for this request
+     * @param {FragmentLoader} loaderInstance Loader instance
+     * @param {EventBus} eventBus Event-bus instance used by loader internally
      */
     function digestFragmentBuffer(data, request, onResult, loaderInstance, eventBus) {
 
@@ -407,7 +394,7 @@ function ExmgFragmentDecrypt(config) {
 
             const keyParsed = parseInt(cipherMessageForBuffer.key);
             const ivParsed = parseInt(cipherMessageForBuffer.iv);
-            if (keyParsed === NaN || ivParsed === NaN) {
+            if (isNaN(keyParsed) || isNaN(ivParsed)) {
                 throw new Error('Key or IV have wrong format (should be serialized as integer numbers)');
             }
 
@@ -427,7 +414,7 @@ function ExmgFragmentDecrypt(config) {
             keyView.setUint32(0, keyParsed, true);
             ivView.setUint32(0, ivParsed, true);
 
-            log('Key/IV:', key, iv)
+            log('Key/IV:', key, iv);
 
             // decrypt the mdat buffer
             const mdat = mdats[index];
@@ -444,7 +431,7 @@ function ExmgFragmentDecrypt(config) {
                 //log(digestDataBuffer)
                 //log('Computed mdat data offset:', offset);
                 const mdatDataOffset = mdats[index]._offset + 8;
-                digestDataBuffer.set(clearMdatPayload, mdatDataOffset)
+                digestDataBuffer.set(clearMdatPayload, mdatDataOffset);
             });
             //log(ISOBoxer.parseBuffer(digestDataBuffer.buffer));
             onResult(digestDataBuffer.buffer);
@@ -453,10 +440,6 @@ function ExmgFragmentDecrypt(config) {
         });
     }
 
-    /**
-     * @param {number} lookupMediaTimeSecs
-     * @returns {ExmgCipherMessage}
-     */
     function findCipherMessageByMediaTime(firstPts, trackId, trackType) {
 
         const cipherMessages = getOrCreateCipherMessagesForTrackId(trackId, trackType);
@@ -472,7 +455,7 @@ function ExmgFragmentDecrypt(config) {
                     matchMsg = msg;
                     break;
                 }
-            } catch(err) {
+            } catch (err) {
                 console.error('Error accessing cipher-message data:', err.message);
             }
         }

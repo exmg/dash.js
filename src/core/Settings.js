@@ -355,7 +355,8 @@ function Settings() {
         streaming: {
             exmg: {
                 keyFilesBaseUrl: null,
-                keyUpdateIntervalMs: 2000,
+                keyFilesCustomExt: null,
+                keyUpdateIntervalMs: 2000
             },
             metricsMaxListDepth: 1000,
             abandonLoadTimeout: 10000,
