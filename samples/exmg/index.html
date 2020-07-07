@@ -40,9 +40,8 @@
 
             let keyUrl = searchParams.get('keyUrl');
             if (!keyUrl) {
-                const keyHost = '46.226.109.109:3002';
-                const subDir = ''
-                keyUrl = `http://${keyHost}/cmaf/${streamId}/${eventName}/${subDir}`;
+                throw new Error('Need keyUrl query-param');
+                alert('Please pass keyUrl query-param');
             }
 
             const video = document.querySelector("#videoPlayer");
