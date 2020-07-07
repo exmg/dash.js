@@ -30,20 +30,26 @@
         </p>
 
         <script>
-            //var url = `http://localhost:8080/out.mpd`;
 
-            const streamId = 664379;
-            const eventName = 'stephan';
-            const subDir = 1591799184
+            const searchParams = new URL(window.location).searchParams;
 
-            var url = `https://exmachina-ull-demo.akamaized.net/cmaf/live/${streamId}/${eventName}/out.mpd`
+            let streamUrl = searchParams.get('streamUrl');
+            if (!streamUrl) {
+                streamUrl = `https://exmachina-ull-demo.akamaized.net/cmaf/live/664379/stephan/out.mpd`
+            }
 
-            const keyHost = '46.226.109.109:3002'
+            let keyUrl = searchParams.get('keyUrl');
+            if (!keyUrl) {
+                const keyHost = '46.226.109.109:3002';
+                const subDir = ''
+                keyUrl = `http://${keyHost}/cmaf/${streamId}/${eventName}/${subDir}`;
+            }
 
-            var video = document.querySelector("#videoPlayer");
-            var player = null;
+            const video = document.querySelector("#videoPlayer");
+            let player = null;
 
             function go() {
+
                 player && player.reset();
                 player = dashjs.MediaPlayer().create();
 
@@ -57,13 +63,13 @@
                         liveDelay: 0,
                         //lowLatencyEnabled: true,
                         exmg: {
-                            keyFilesBaseUrl: `http://${keyHost}/cmaf/${streamId}/${eventName}/${subDir}`,
+                            keyFilesBaseUrl: keyUrl,
                             keyUpdateIntervalMs: 1000
                         }
                     },
                 });
 
-                player.initialize(video, url, true);
+                player.initialize(video, streamUrl, true);
 
                 player.on('fragmentLoadingStarted', () => {
                     if (window.exmgEvents) return;
