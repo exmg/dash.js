@@ -75,8 +75,14 @@ function ExmgFragmentDecrypt(config) {
     let keyFilesCustomExt;
     let keyIndexUpdateInterval = null;
     let keyUpdateIntervalMs;
+
     let audioKeyIndex = null;
     let videoKeyIndex = null;
+
+    let audioKeyStartTime = 0;
+    let videoKeyStartTime = 0;
+
+    let updateKeysOn = false;
 
     const audioKeyMap = {};
     const videoKeyMap = {};
@@ -84,10 +90,7 @@ function ExmgFragmentDecrypt(config) {
     const movInitDataHash = {};
     const perf = window.performance;
 
-    let refCount = 0;
-
     function init() {
-        refCount++;
 
         if (keyIndexUpdateInterval !== null) return; // singleton, we only do this once!
 
@@ -108,9 +111,8 @@ function ExmgFragmentDecrypt(config) {
         updateKeys(); // run once immediately on init
     }
 
+    // may be called multiple times on disposal
     function deinit() {
-        refCount--;
-        if (refCount > 0) return;
         clearInterval(keyIndexUpdateInterval);
         keyIndexUpdateInterval = null;
     }
@@ -151,20 +153,21 @@ function ExmgFragmentDecrypt(config) {
     }
 
     function updateKeys() {
+        if (!updateKeysOn) return;
         fetchKeyIndex(keyFilesBaseUrl, 'audio').then((index) => {
             audioKeyIndex = extractKeyIndexUrls(index);
-            fetchKeysOnIndexUpdated('audio');
+            fetchKeysOnIndexUpdated('audio', audioKeyStartTime);
         });
         fetchKeyIndex(keyFilesBaseUrl, 'video').then((index) => {
             videoKeyIndex = extractKeyIndexUrls(index);
-            fetchKeysOnIndexUpdated('video');
+            fetchKeysOnIndexUpdated('video', videoKeyStartTime);
         });
     }
 
     /**
-     *
+     * @typedef {Array} KeyIndexEntry // {[number, string]} KeyIndexEntry
      * @param {string} keyIndexData
-     * @returns {Array<string>}
+     * @returns {Array<KeyIndexEntry>}
      */
     function extractKeyIndexUrls(keyIndexData) {
         if (!keyIndexData) {
@@ -172,13 +175,27 @@ function ExmgFragmentDecrypt(config) {
             return;
         }
         return keyIndexData.split('\n')
-                    .map((url) => url.substr(url.lastIndexOf('/') + 1))
-                    .filter((url) => !!url.length);
+            .map((url) => url.substr(url.lastIndexOf('/') + 1))
+            .filter((url) => !!url.length)
+            .map((url) => {
+                try {
+                    const time = url.split('.')[0].split('_')[4];
+                    return [time, url];
+                } catch (err) {
+                    throw new Error('Key-index URL must be malformed: ' + url);
+                }
+            });
     }
 
-    function fetchAndMapKeys(index, keyMap) {
+    /**
+     * @param {Array<KeyIndexEntry>} index
+     * @param {[url]: boolean} keyMap
+     * @param {number} fromTime
+     */
+    function fetchAndMapKeys(index, keyMap, fromTime) {
         if (!index) return;
-        index.forEach((url) => {
+        index.forEach(([mediaTime, url]) => {
+            if (mediaTime < fromTime) return;
             if (keyMap[url]) {
                 return;
             }
@@ -196,13 +213,13 @@ function ExmgFragmentDecrypt(config) {
         });
     }
 
-    function fetchKeysOnIndexUpdated(codecType) {
+    function fetchKeysOnIndexUpdated(codecType, fromTime = 0) {
         switch (codecType) {
         case 'audio':
-            fetchAndMapKeys(audioKeyIndex, audioKeyMap);
+            fetchAndMapKeys(audioKeyIndex, audioKeyMap, fromTime);
             break;
         case 'video':
-            fetchAndMapKeys(videoKeyIndex, videoKeyMap);
+            fetchAndMapKeys(videoKeyIndex, videoKeyMap, fromTime);
             break;
         }
     }
@@ -298,7 +315,6 @@ function ExmgFragmentDecrypt(config) {
             }
 
             const timescale = parsedFile.fetch('mdhd').timescale;
-
             const id = tkhd.track_ID;
 
             movInitDataHash[makeSegmentTypeHashkey(type, id)] = {
@@ -324,15 +340,29 @@ function ExmgFragmentDecrypt(config) {
         let isKeyMissing = false;
 
         for (let index = 0; index < trafs.length; index++) {
+            // get track fragment first PTS
             const trafBox = trafs[index];
-
-            // compute track fragment first PTS seconds
             const tfhd = trafBox.boxes[0];
             const tfdt = trafBox.boxes[1];
-
             const trackId = tfhd.track_ID;
             const firstPts = tfdt.baseMediaDecodeTime;
+
             const trackInfo = movInitDataHash[makeSegmentTypeHashkey(mediaType, trackId)];
+
+            switch(mediaType) {
+            case 'audio':
+                audioKeyStartTime = firstPts;
+                break;
+            case 'video':
+                videoKeyStartTime = firstPts;
+                break;
+            }
+
+            // start updating keys once key-start-time is first set
+            if (!updateKeysOn) {
+                updateKeysOn = true;
+                updateKeys();
+            }
 
             // lookup key
             const cipherMessageForBuffer = findCipherMessageByMediaTime(firstPts, trackInfo.id, trackInfo.type);
