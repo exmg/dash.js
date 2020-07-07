@@ -189,7 +189,7 @@ function ExmgFragmentDecrypt(config) {
 
     /**
      * @param {Array<KeyIndexEntry>} index
-     * @param {[url]: boolean} keyMap
+     * @param {*} keyMap // {[url: string]: boolean}
      * @param {number} fromTime
      */
     function fetchAndMapKeys(index, keyMap, fromTime) {
@@ -349,7 +349,7 @@ function ExmgFragmentDecrypt(config) {
 
             const trackInfo = movInitDataHash[makeSegmentTypeHashkey(mediaType, trackId)];
 
-            switch(mediaType) {
+            switch (mediaType) {
             case 'audio':
                 audioKeyStartTime = firstPts;
                 break;
