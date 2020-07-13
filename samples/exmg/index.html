@@ -1,14 +1,14 @@
 <html>
     <head>
-        <!-- App -->
-
-        <script>
-            
-        </script>
+        <!-- Local dash.js build -->
         <script src="../../dist/dash.all.debug.js"></script>
 
-        <!-- EXMG MQTT -->
-        <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+        <!-- MQTT client -->
+        <!-- <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script> -->
+
+        <!-- Plotly.js -->
+        <script src="../../node_modules/plotly.js-dist/plotly.js"></script>
+
     </head>
     <body>
 
@@ -29,7 +29,13 @@
             <output id="buffered-range-out"></output>
         </p>
 
+        <p>
+            <div id="buffer-graph"></div>
+        </p>
+
         <script>
+
+            const KEY_UPDATE_INTERVAL_MS = 1000;
 
             const searchParams = new URL(window.location).searchParams;
 
@@ -45,6 +51,7 @@
             }
 
             const video = document.querySelector("#videoPlayer");
+
             let player = null;
 
             function go() {
@@ -63,56 +70,52 @@
                         //lowLatencyEnabled: true,
                         exmg: {
                             keyFilesBaseUrl: keyUrl,
-                            keyUpdateIntervalMs: 1000
+                            keyUpdateIntervalMs: KEY_UPDATE_INTERVAL_MS
                         }
                     },
                 });
 
+                let keyRangeMaxSecs = [0, 0]
+
+                player.on('exmgLiveSyncCipherMessage', (event) => {
+                    console.log('exmgLiveSyncCipherMessage:', event)
+
+                    let mediaType;
+                    if (event.mediaType === 'audio') {
+                        mediaType = 0;
+                    } else if (event.mediaType === 'video') {
+                        mediaType = 1;
+                    }
+
+                    let keyRangeSecs = event.mediaTimeSecs + event.keyDurationSecs;
+                    keyRangeMaxSecs[mediaType] = Math.max(keyRangeMaxSecs[mediaType], keyRangeSecs);
+                    document.querySelector(`#key-range-${event.mediaType}-out`).value = keyRangeMaxSecs[mediaType];
+
+                });
+
+                player.on('exmgLiveSyncCipherMiss', (event) => {
+                    console.log('exmgLiveSyncCipherMiss:', event)
+                });
+
+                player.on('exmgLiveSyncCipherDecrypting', (event) => {
+                    console.log('exmgLiveSyncCipherDecrypting:', event)
+                });
+
+                player.on('exmgLiveSyncCipherDecrypted', (event) => {
+                    console.log('exmgLiveSyncCipherDecrypted:', event)
+                });
+
                 player.initialize(video, streamUrl, true);
 
-                player.on('fragmentLoadingStarted', () => {
-                    if (window.exmgEvents) return;
+                function updateDom() {
+                    const rangesLen = video.buffered.length
+                    if (!rangesLen) return;
+                    document.querySelector('#buffered-range-out').value 
+                        = '[' + video.buffered.start(rangesLen - 1) + ', ' + video.buffered.end(rangesLen - 1) + ']' 
+                            // + video.buffered.end(rangesLen - 1) - video.currentTime;
+                }
 
-                    let keyRangeMaxSecs = [0, 0]
-
-                    window.exmgFragmentDecrypt.eventBus.on('exmgLiveSyncCipherMessage', (event) => {
-                        console.log('exmgLiveSyncCipherMessage:', event)
-
-                        let mediaType;
-                        if (event.mediaType === 'audio') {
-                            mediaType = 0;
-                        } else if (event.mediaType === 'video') {
-                            mediaType = 1;
-                        }
-
-                        let keyRangeSecs = event.mediaTimeSecs + event.keyDurationSecs;
-                        keyRangeMaxSecs[mediaType] = Math.max(keyRangeMaxSecs[mediaType], keyRangeSecs);
-                        document.querySelector(`#key-range-${event.mediaType}-out`).value = keyRangeMaxSecs[mediaType];
-
-                    });
-                    window.exmgFragmentDecrypt.eventBus.on('exmgLiveSyncCipherMiss', (event) => {
-                        console.log('exmgLiveSyncCipherMiss:', event)
-                    });
-                    window.exmgFragmentDecrypt.eventBus.on('exmgLiveSyncCipherDecrypting', (event) => {
-                        console.log('exmgLiveSyncCipherDecrypting:', event)
-                    });
-                    window.exmgFragmentDecrypt.eventBus.on('exmgLiveSyncCipherDecrypted', (event) => {
-                        console.log('exmgLiveSyncCipherDecrypted:', event)
-                    });
-                    window.exmgEvents = true;
-
-                    setInterval(() => {
-
-                        //console.log(video.buffered)
-
-                        const rangesLen = video.buffered.length
-                        if (!rangesLen) return;
-                        document.querySelector('#buffered-range-out').value 
-                            = '[' + video.buffered.start(rangesLen - 1) + ', ' + video.buffered.end(rangesLen - 1) + ']' 
-                               // + video.buffered.end(rangesLen - 1) - video.currentTime;
-
-                    }, 1000)
-                });
+                setInterval(updateDom, KEY_UPDATE_INTERVAL_MS);
 
                 video.play();
             }

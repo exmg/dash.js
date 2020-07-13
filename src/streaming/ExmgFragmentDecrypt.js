@@ -553,7 +553,5 @@ function ExmgFragmentDecrypt(config) {
         eventBus: _eventBus
     };
 
-    window.exmgFragmentDecrypt = instance;
-
     return instance;
 }
