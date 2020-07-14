@@ -80,39 +80,59 @@
 
             const keyRangeMaxSecs = [0, 0];
 
+            const bufferDecryptedTrace = {
+                x: [],
+                y: [],
+                type: 'scatter',
+                name: 'Playable-Buffer (decrypted) [s]',
+                line: {
+                    color: '#00FF00',
+                    width: 3
+                }
+            }
+
             const bufferLengthVideoTrace = {
                 x: [],
                 y: [],
                 type: 'scatter',
-                name: 'Loaded-Ahead Video (encrypted) [s]'
+                name: 'Loaded-Ahead Video (encrypted) [s]',
+                line: {
+                    color: '#C00000',
+                    width: 3
+                }
             }
 
             const bufferLengthAudioTrace = {
                 x: [],
                 y: [],
                 type: 'scatter',
-                name: 'Loaded-Ahead Audio (encrypted) [s]'
-            }
-
-            const bufferDecryptedTrace = {
-                x: [],
-                y: [],
-                type: 'scatter',
-                name: 'Playable-Buffer (decrypted) [s]'
+                name: 'Loaded-Ahead Audio (encrypted) [s]',
+                line: {
+                    color: '#F00000',
+                    width: 3
+                }
             }
 
             const keyScopeLoadedAudioTrace = {
                 x: [],
                 y: [],
                 type: 'scatter',
-                name: 'Loaded-Ahead Keys (audio) [s]'
+                name: 'Loaded-Ahead Keys (audio) [s]',
+                line: {
+                    color: '#0060B0',
+                    width: 3
+                }
             }
 
             const keyScopeLoadedVideoTrace = {
                 x: [],
                 y: [],
                 type: 'scatter',
-                name: 'Loaded-Ahead Keys (video) [s]'
+                name: 'Loaded-Ahead Keys (video) [s]',
+                line: {
+                    color: '#0000E0',
+                    width: 3
+                }
             }
 
             const keyScopeAvailableTrace = {
@@ -173,12 +193,12 @@
                 keyScopeAvailableTrace.y.push(0);
 
                 const data = [
-                    bufferDecryptedTrace,
-                    bufferLengthAudioTrace,
-                    bufferLengthVideoTrace,
+                    keyScopeAvailableTrace,
                     keyScopeLoadedAudioTrace,
                     keyScopeLoadedVideoTrace,
-                    keyScopeAvailableTrace
+                    bufferLengthAudioTrace,
+                    bufferLengthVideoTrace,
+                    bufferDecryptedTrace,
                 ];
 
                 Plotly.newPlot('buffer-graph', data, bufferGraphLayout);
@@ -200,7 +220,7 @@
                         //logLevel: dashjs.Debug.LOG_LEVEL_DEBUG
                     },
                     streaming: {
-                        liveDelay: 6,
+                        liveDelay: 10,
                         //lowLatencyEnabled: true,
                         exmg: {
                             keyFilesBaseUrl: keyUrl,
