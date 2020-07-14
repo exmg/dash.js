@@ -14,6 +14,17 @@
                 text-align: center;
                 font-family: Verdana, Geneva, Tahoma, sans-serif;
             }
+
+            output {
+                font-size: 2em;
+                font-family: monospace;
+                background-color: aquamarine;
+            }
+
+            button {
+                font-size: 2em;
+                font-weight: lighter
+            }
         </style>
 
     </head>
@@ -22,10 +33,11 @@
         <h1>SecureSync Demo</h1>
 
         <p style="text-align: left; width: 60%; margin: auto;">
-            <label>Keys loaded time-range (audio/video):</label>
-            <output id="key-range-audio-out"></output> | <output id="key-range-video-out"></output> [s]
-            <br>
-            <label>Playable time-range (decrypted):</label><output id="buffered-range-out"></output> [s]
+            <label>Keys loaded time-range (audio & video):</label>
+            <output id="key-range-audio-out"></output> & <output id="key-range-video-out"></output> [s]
+            <br><br>
+            <label>Playable time-range (decrypted):</label>
+            <output id="buffered-range-out"></output> [s]
         </p>
 
         <p style="text-align: center;">
@@ -61,8 +73,8 @@
             let startTime = null;
 
             let bufferPlayableLength = 0;
-            let bufferLengthVideo = 0;
-            let bufferLengthAudio = 0;
+            let bufferUntilAudio = 0;
+            let bufferUntilVideo = 0;
 
             const video = document.querySelector("#videoPlayer");
 
@@ -116,18 +128,26 @@
 
             function updateDom() {
 
-                const rangesLen = video.buffered.length
+                const videoTime = video.currentTime;
+                const videoBuffered = video.buffered;
 
+                const rangesLen = video.buffered.length
                 if (!rangesLen) return;
 
-                bufferPlayableLength
-                    = Math.max(video.buffered.end(rangesLen - 1)
-                        - video.buffered.start(rangesLen - 1)
-                        - video.currentTime, 0);
+                let currentRangeIdx = -1;
+                for (let i = 0; i < rangesLen; i++) {
+                    if (videoTime >= videoBuffered.start(i)
+                        && videoTime <= videoBuffered.end(i)) {
+                        currentRangeIdx = i;
+                    }
+                }
+
+                if (currentRangeIdx < 0) return;
+
+                bufferPlayableLength = videoBuffered.end(currentRangeIdx) - videoTime;
 
                 document.querySelector('#buffered-range-out').value
-                    = '[' + video.buffered.start(rangesLen - 1) + ', ' + video.buffered.end(rangesLen - 1) + ']'
-                        // + video.buffered.end(rangesLen - 1) - video.currentTime;
+                    = `[ ${videoBuffered.start(currentRangeIdx).toFixed(3)} < ${videoTime.toFixed(3)} < ${videoBuffered.end(currentRangeIdx).toFixed(3)} ]`
 
                 updatePlots();
             }
@@ -145,9 +165,9 @@
                 keyScopeLoadedVideoTrace.x.push(time);
                 keyScopeAvailableTrace.x.push(time);
 
-                bufferLengthAudioTrace.y.push(bufferLengthAudio);
-                bufferLengthVideoTrace.y.push(bufferLengthVideo);
                 bufferDecryptedTrace.y.push(bufferPlayableLength);
+                bufferLengthAudioTrace.y.push(Math.max(0, bufferUntilAudio - video.currentTime));
+                bufferLengthVideoTrace.y.push(Math.max(0, bufferUntilVideo - video.currentTime));
                 keyScopeLoadedAudioTrace.y.push(Math.max(0, keyRangeMaxSecs[0] - video.currentTime));
                 keyScopeLoadedVideoTrace.y.push(Math.max(0, keyRangeMaxSecs[1] - video.currentTime));
                 keyScopeAvailableTrace.y.push(0);
@@ -165,7 +185,6 @@
             }
 
             setInterval(updateDom, KEY_UPDATE_INTERVAL_MS);
-            updateDom();
 
             function start() {
 
@@ -181,7 +200,7 @@
                         //logLevel: dashjs.Debug.LOG_LEVEL_DEBUG
                     },
                     streaming: {
-                        liveDelay: 0,
+                        liveDelay: 6,
                         //lowLatencyEnabled: true,
                         exmg: {
                             keyFilesBaseUrl: keyUrl,
@@ -195,13 +214,12 @@
 
                     const {request} = event;
                     const mediaEndTime = request.startTime + request.duration;
-                    const bufferLength = Math.max(mediaEndTime - video.currentTime, 0);
                     switch (request.mediaType) {
                     case 'audio':
-                        bufferLengthAudio = bufferLength;
+                        bufferUntilAudio = mediaEndTime;
                         break;
                     case 'video':
-                        bufferLengthVideo = bufferLength;
+                        bufferUntilVideo = mediaEndTime;
                         break;
                     }
                 })
@@ -220,7 +238,7 @@
 
                     keyRangeMaxSecs[mediaType] = Math.max(keyRangeMaxSecs[mediaType], keyRangeSecs);
 
-                    document.querySelector(`#key-range-${event.mediaType}-out`).value = keyRangeMaxSecs[mediaType];
+                    document.querySelector(`#key-range-${event.mediaType}-out`).value = keyRangeMaxSecs[mediaType].toFixed(3);
 
                 });
 
