@@ -296,6 +296,8 @@ function ExmgFragmentDecrypt(config) {
 
         const {mediaType} = request;
 
+        _eventBus.trigger(Events.EXMG_LIVE_SYNC_CIPHER_PAYLOAD, {request});
+
         // parse whole segment with ISO-FF
         let parsedFile = ISOBoxer.parseBuffer(data);
 
@@ -409,6 +411,8 @@ function ExmgFragmentDecrypt(config) {
 
         const clearBufferPromises = [];
 
+        //const cipherMessages = new Set();
+
         for (let index = 0; index < trafs.length; index++) {
             const trafBox = trafs[index];
             const tfhd = trafBox.boxes[0];
@@ -420,8 +424,9 @@ function ExmgFragmentDecrypt(config) {
 
             const cipherMessageForBuffer = findCipherMessageByMediaTime(firstPts, trackInfo.id, trackInfo.type);
 
-            // create full key data from short keys
+            //cipherMessages.add(cipherMessageForBuffer);
 
+            // create full key data from short keys
             const keyParsed = parseInt(cipherMessageForBuffer.key);
             const ivParsed = parseInt(cipherMessageForBuffer.iv);
             if (isNaN(keyParsed) || isNaN(ivParsed)) {
@@ -458,15 +463,11 @@ function ExmgFragmentDecrypt(config) {
             log(`Decrypted ${clearBuffers.length} fragment buffers in ${decryptTimeMs.toFixed(3)} ms`);
             clearBuffers.forEach((clearMdatPayload, index) => {
                 log('Copying back into digest data clear bytes:', clearMdatPayload.byteLength, mdats[index].size - 8);
-                //log(digestDataBuffer)
-                //log('Computed mdat data offset:', offset);
                 const mdatDataOffset = mdats[index]._offset + 8;
                 digestDataBuffer.set(clearMdatPayload, mdatDataOffset);
             });
-            //log(ISOBoxer.parseBuffer(digestDataBuffer.buffer));
             onResult(digestDataBuffer.buffer);
-
-            _eventBus.trigger(Events.EXMG_LIVE_SYNC_CIPHER_DECRYPTED, {mediaType, url});
+            _eventBus.trigger(Events.EXMG_LIVE_SYNC_CIPHER_DECRYPTED, {mediaType, url /*, cipherMessages */});
         });
     }
 

@@ -63,9 +63,7 @@
     "express": "^4.17.1",
     "fast-deep-equal": "2.0.1",
     "imsc": "^1.0.2",
-    "mkdirp": "^1.0.4",
-    "phin": "^3.4.1",
-    "plotly.js-dist": "^1.54.6"
+    "mkdirp": "^1.0.4"
   },
   "repository": {
     "type": "git",
