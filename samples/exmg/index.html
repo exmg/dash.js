@@ -69,6 +69,11 @@
                 alert('Please pass keyUrl query-param');
             }
 
+            let liveDelay = parseFloat(searchParams.get('liveDelay'));
+            if (!Number.isFinite(liveDelay)) {
+                liveDelay = 0;
+            }
+
             let player = null;
             let startTime = null;
 
@@ -220,7 +225,7 @@
                         //logLevel: dashjs.Debug.LOG_LEVEL_DEBUG
                     },
                     streaming: {
-                        liveDelay: 10,
+                        liveDelay,
                         //lowLatencyEnabled: true,
                         exmg: {
                             keyFilesBaseUrl: keyUrl,
