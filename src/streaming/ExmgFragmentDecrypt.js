@@ -144,7 +144,7 @@ function ExmgFragmentDecrypt(config) {
                 } else {
                     if (retries >= 0) {
                         console.warn('Retrial attempts for fetching key-index. Counter:', retries);
-                        return fetchKeyIndex(url, codecType, --retries);
+                        return fetchKeyIndex(keyFilesBaseUrl, codecType, --retries);
                     } else {
                         return null;
                     }
