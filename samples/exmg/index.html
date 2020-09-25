@@ -1,13 +1,15 @@
 <html>
     <head>
-        <!-- Local dash.js build -->
-        <script src="../../dist/dash.all.debug.js"></script>
-
-        <!-- MQTT client -->
-        <!-- <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script> -->
 
         <!-- Plotly.js -->
         <script src="./plotly-1.54.6.js"></script>
+
+        <!-- MQTT client -->
+        <script src="./mqtt-4.2.1.js"></script>
+
+        <!-- Local dash.js build -->
+        <script src="../../dist/dash.all.debug.js"></script>
+
 
         <style>
             body {
@@ -109,8 +111,8 @@
 
             player.updateSettings(dashjsSettings);
 
-            player.on('exmgLiveSyncCipherPayload', (event) => {
-                console.log('exmgLiveSyncCipherPayload', event);
+            player.on('exmgLiveSyncFragmentCached', (event) => {
+                console.log('exmgLiveSyncFragmentCached', event);
 
                 const {request} = event;
                 const mediaEndTime = request.startTime + request.duration;
@@ -153,6 +155,12 @@
             player.on('exmgLiveSyncCipherDecrypted', (event) => {
                 console.log('exmgLiveSyncCipherDecrypted:', event)
             });
+
+            /*
+            player.on('fragmentLoadingCompleted', (event) => {
+                //console.log(event)
+            })
+            */
 
             player.initialize(video, streamUrl, true);
 

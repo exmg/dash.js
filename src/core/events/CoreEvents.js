@@ -79,6 +79,7 @@ class CoreEvents extends EventsBase {
         this.XLINK_ELEMENT_LOADED = 'xlinkElementLoaded';
         this.XLINK_READY = 'xlinkReady';
 
+        this.EXMG_LIVE_SYNC_FRAGMENT_CACHED = 'exmgLiveSyncFragmentCached';
         this.EXMG_LIVE_SYNC_CIPHER_PAYLOAD = 'exmgLiveSyncCipherPayload';
         this.EXMG_LIVE_SYNC_CIPHER_MESSAGE = 'exmgLiveSyncCipherMessage';
         this.EXMG_LIVE_SYNC_CIPHER_MISS = 'exmgLiveSyncCipherMiss';

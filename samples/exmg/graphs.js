@@ -3,8 +3,32 @@
 let bufferPlayableLength = 0;
 let bufferUntilAudio = 0;
 let bufferUntilVideo = 0;
+let fragmentsLoadedAudio = 0;
+let fragmentsLoadedVideo = 0;
 
 const keyRangeMaxSecs = [0, 0];
+
+const audioFragmentsLoadAheadTrace = {
+    x: [],
+    y: [],
+    type: 'scatter',
+    name: 'Audio-Fragments loaded ahead [s]',
+    line: {
+        color: '#ff6600',
+        width: 3
+    }
+}
+
+const videoFragmentsLoadAheadTrace = {
+    x: [],
+    y: [],
+    type: 'scatter',
+    name: 'Video-Fragments loaded ahead [s]',
+    line: {
+        color: '#ff0066',
+        width: 3
+    }
+}
 
 const bufferDecryptedTrace = {
     x: [],
@@ -93,7 +117,7 @@ function updatePlots() {
     keyScopeAvailableTrace.y.push(0);
 
     const data = [
-        keyScopeAvailableTrace,
+        //keyScopeAvailableTrace,
         keyScopeLoadedAudioTrace,
         keyScopeLoadedVideoTrace,
         bufferLengthAudioTrace,

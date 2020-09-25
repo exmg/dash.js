@@ -39,7 +39,11 @@ import Errors from './../core/errors/Errors';
 import FactoryMaker from '../core/FactoryMaker';
 import ExmgFragmentDecrypt from './ExmgFragmentDecrypt';
 
+import {ExmgRequestCache} from './ExmgRequestCache';
+
 let EXMG_ENABLE_CIPHER_DIGEST = true;
+
+const fragmentCache = new ExmgRequestCache();
 
 function FragmentLoader(config) {
 
@@ -102,7 +106,24 @@ function FragmentLoader(config) {
             });
         };
 
+        function digestFragmentData(request, data) {
+            if (EXMG_ENABLE_CIPHER_DIGEST) {
+                console.log('Processing via ExmgFragmentDecrypt:', request.url);
+                exmgFragDecrypter.digestFragmentBuffer(data, request, report, instance, eventBus);
+            } else {
+                report(data);
+            }
+        }
+
         if (request) {
+
+            const cachedData = fragmentCache.get(request.url);
+            if (cachedData) {
+                console.log('Using cache for:', request.url);
+                digestFragmentData(request, cachedData);
+                return;
+            }
+
             httpLoader.load({
                 request: request,
                 progress: function (event) {
@@ -120,12 +141,14 @@ function FragmentLoader(config) {
                     }
                 },
                 success: function (data) {
-                    if (EXMG_ENABLE_CIPHER_DIGEST) {
-                        console.log('Processing via ExmgFragmentDecrypt:', request.url);
-                        exmgFragDecrypter.digestFragmentBuffer(data, request, report, instance, eventBus);
-                    } else {
-                        report(data);
-                    }
+                    fragmentCache.put(request.url, data);
+                    eventBus.trigger(Events.EXMG_LIVE_SYNC_FRAGMENT_CACHED, {
+                        request: request,
+                        response: data || null,
+                        error: null,
+                        sender: instance
+                    });
+                    digestFragmentData(request, data);
                 },
                 error: function (request, statusText, errorText) {
                     report(
