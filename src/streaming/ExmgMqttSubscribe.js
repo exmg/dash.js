@@ -1,6 +1,10 @@
-const MQTT_HOST = "wss://mqtt.liveryvideo.com?jwt=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyLWlkIjoid2ViMSIsImF1dGgtZ3JvdXBzIjoic3Vic2NyaWJlIn0.jovY0SCF9OZbsaj9Rx4yB8aN9QYxUNAOCd7m3TEkI49mu_3u1r3kqe27dOYOc1MrHOx0ezv2OQIYjum60mOTKr1W4jtNrXtpzAkheTu_j2pOffeKiz-8oNg-C99mvlXTad0XrRCiP30R_3UoKh7GzgwgWw0eJhr37RiyPILn-5R-cuVHZoh8ddWaQHyIYk2HfQQTAHtAdc56BHPWxiN196NpjYEnBitdBBG0CTpcxTula9kBS8vvek5Sdd3SMjAT3tGw0fX3RgHJMhbQYKxdpzz_Njnfh1f4MCJgFHZiu1O7obO-TmuiT-diWP4xD0JkryJ0a3rpqh61--Bt_3NDgVJzsKvg3JpHkOJtRAaR5keHAa5BRB_j1iGXr-0PBt8aRRL7NyFUtyh7QbcVAEA2txEIgPH767q-5poLfM-yF1zp7XtDZrYXMdJy3cIDOZ4zJJWrOAL1D8AaWLGIsFHXY5l3-7ptc0QapTFh1OZP3rbvV-yR0TfXJyFTKrKg6F9ULVHN6XEcz7PNfzG-x5Ca6SXa36oY4d8siC7SYnLh5jY1iGbarfwer37BgUBIpXsGAjMyOuw7DU5JsmVC6vzq9mNkFgfn7xTNHFjOZunn605DzA9R4-B2Dgs2cOSXKZcJoV-C-IdoE_z4v_15wXI-IMq7XwtzArnLi256KayX_js";
-const MQTT_TOPIC = 'joep/test';
-const MQTT_CLIENT_ID = 'web1';
+import { v4 as getUuid } from 'uuid';
+
+const MQTT_HOST = "ws://xvm-190-41.dc0.ghst.net:8885/mqtt";
+const MQTT_TOPIC = '/mqtt';
+const MQTT_CLIENT_ID = getUuid();
+const MQTT_USERNAME = "user1";
+const MQTT_PASSWORD = "liverymqtt123";
 
 let mqttClient = null;
 
@@ -12,13 +16,15 @@ function createMqttSubscribeClient(onMessage) {
 
     const host = MQTT_HOST;
     const options = {
-        keepalive: 10,
+        clientId: MQTT_CLIENT_ID,
+        username: MQTT_USERNAME,
+        password: MQTT_PASSWORD,
         protocolId: 'MQTT',
-        protocolVersion: 4,
-        clean: true,
+        protocolVersion: 4, // actually meaning 3.1.1, while 3 means 3.1 and is incompatible with the latter
+        keepalive: 4,
         reconnectPeriod: 1000,
-        connectTimeout: 30*1000,
-        clientId: MQTT_CLIENT_ID
+        connectTimeout: 8 * 1000,
+        clean: true
     };
 
     if (!window.mqtt) {
@@ -37,6 +43,7 @@ function createMqttSubscribeClient(onMessage) {
         });
     });
     client.on('message', function (topic, message) {
+        console.log('EXMG MQTT:', topic, message)
         onMessage(message.toString());
     });
     return client;
