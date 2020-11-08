@@ -7,55 +7,24 @@ import Settings from './../core/Settings';
 ExmgFragmentDecrypt.__dashjs_factory_name = 'ExmgFragmentDecrypt';
 export default FactoryMaker.getSingletonFactory(ExmgFragmentDecrypt);
 
-import {mqttClient} from './ExmgMqttSubscribe';
+import {singletonMqttClient} from './ExmgMqttSubscribe';
+import {decryptBufferFromAesCtr} from './ExmgCrypto';
+import {getLogFunc} from "./ExmgLog";
 
-const DEBUG = false;
-const log = DEBUG ? console.log : () => void 0;
+const DEBUG = true;
 
-/**
- * @param {Uint8Array} cipherData Encrypted data buffer
- * @param {Uint8Array} key 16-bytes (128 bits) key
- * @param {Uint8Array} iv 8 bytes (64 bits) IV zero-padded in start of 16-bytes buffer
- * @returns {Promise<Uint8Array>}
- */
-function decryptBufferFromAesCtr(cipherData, key, iv) {
+const USE_MQTT_KEY_TRANSPORT = true;
 
-    if (key.byteLength !== 16) throw new Error('Key must be 128 bits');
-    if (iv.byteLength !== 16) throw new Error('8-bytes IV must be padded in 128 bits CTR data');
+const log = getLogFunc(DEBUG, "exmg-fragment-decrypt");
 
-    const crypto = window.crypto;
-    if (!crypto || !crypto.subtle) {
-        throw new Error('WebCrypto (Subtle) API not available');
-    }
-    const algoId = 'AES-CTR';
-    return crypto.subtle.importKey(
-        'raw',
-        key,
-        algoId,
-        false,
-        ['decrypt']
-    ).then((keyObj) => {
-        return crypto.subtle.decrypt(
-            {
-                name: algoId,
-                counter: iv,
-                length: 64 // we use an 8-byte IV
-            },
-            keyObj,
-            cipherData
-        )
-        .then((clearData) => {
-            return new Uint8Array(clearData);
-        })
-        .catch((err) => {
-            console.error('Error decrypting AES-CTR cipherdata: ' + err.message);
-        });
-    });
+const MediaType = {
+    AUDIO: 'audio',
+    VIDEO: 'video'
 }
 
 function ExmgFragmentDecrypt(config) {
 
-    console.info('Creating ExmgFragmentDecrypt instance');
+    log('Creating ExmgFragmentDecrypt instance');
 
     const context = this.context;
 
@@ -64,10 +33,10 @@ function ExmgFragmentDecrypt(config) {
     config = config || {};
 
     let instance;
-    let keyFilesBaseUrl;
-    let keyFilesCustomExt;
-    let keyIndexUpdateInterval = null;
-    let keyUpdateIntervalMs;
+    let keyFilesHttpBaseUrl;
+    let keyFilesHttpCustomExt;
+    let keyIndexUpdateHttpInterval = null;
+    let keyUpdateHttpIntervalMs;
 
     let audioKeyIndex = null;
     let videoKeyIndex = null;
@@ -85,29 +54,42 @@ function ExmgFragmentDecrypt(config) {
 
     function init() {
 
-        if (keyIndexUpdateInterval !== null) return; // singleton, we only do this once!
+        if (keyIndexUpdateHttpInterval !== null) {
+            console.warn('Singleton init already called');
+            return; // singleton, we only do this once!
+        }
 
-        keyFilesBaseUrl = Settings(context).getInstance().get().streaming.exmg.keyFilesBaseUrl;
-        if (!keyFilesBaseUrl) {
+        keyFilesHttpBaseUrl = Settings(context).getInstance().get().streaming.exmg.keyFilesBaseUrl;
+        if (!keyFilesHttpBaseUrl) {
             throw new Error('Need `streaming.exmg.keyFilesBaseUrl` property in settings!');
         }
 
-        keyFilesCustomExt = Settings(context).getInstance().get().streaming.exmg.keyFilesCustomExt;
-        if (!keyFilesCustomExt) {
-            keyFilesCustomExt = '';
+        keyFilesHttpCustomExt = Settings(context).getInstance().get().streaming.exmg.keyFilesCustomExt;
+        if (!keyFilesHttpCustomExt) {
+            keyFilesHttpCustomExt = '';
         }
 
-        keyUpdateIntervalMs = Settings(context).getInstance().get().streaming.exmg.keyUpdateIntervalMs;
+        keyUpdateHttpIntervalMs
+            = Settings(context).getInstance().get().streaming.exmg.keyUpdateIntervalMs;
 
-        keyIndexUpdateInterval = setInterval(updateKeys, keyUpdateIntervalMs);
+        keyIndexUpdateHttpInterval
+            = setInterval(updateKeysFromHttp, keyUpdateHttpIntervalMs);
+        updateKeysFromHttp(); // run once immediately on init
 
-        updateKeys(); // run once immediately on init
+        if (USE_MQTT_KEY_TRANSPORT) {
+            singletonMqttClient.on('message', (_topic, messageBuf) => {
+                const message = messageBuf.toString();
+                log(message)
+                onCipherMessage(message.substr(0, message.length - 1))
+            });
+        }
+
     }
 
     // may be called multiple times on disposal
     function deinit() {
-        clearInterval(keyIndexUpdateInterval);
-        keyIndexUpdateInterval = null;
+        clearInterval(keyIndexUpdateHttpInterval);
+        keyIndexUpdateHttpInterval = null;
     }
 
     function fetchKeyMessageUrl(url) {
@@ -129,7 +111,7 @@ function ExmgFragmentDecrypt(config) {
     }
 
     function fetchKeyIndex(keyFilesBaseUrl, codecType, retries = 3) {
-        const url = keyFilesBaseUrl + '/exmg_key_index_' + codecType + keyFilesCustomExt;
+        const url = keyFilesBaseUrl + '/exmg_key_index_' + codecType + keyFilesHttpCustomExt;
         return fetch(url)
             .then((response) => {
                 if (response.ok) {
@@ -145,15 +127,16 @@ function ExmgFragmentDecrypt(config) {
             });
     }
 
-    function updateKeys() {
+    function updateKeysFromHttp() {
+        if (USE_MQTT_KEY_TRANSPORT) return;
         if (!updateKeysOn) return;
-        fetchKeyIndex(keyFilesBaseUrl, 'audio').then((index) => {
+        fetchKeyIndex(keyFilesHttpBaseUrl, MediaType.AUDIO).then((index) => {
             audioKeyIndex = extractKeyIndexUrls(index);
-            fetchKeysOnIndexUpdated('audio', audioKeyStartTime);
+            fetchKeysOnIndexUpdated(MediaType.AUDIO, audioKeyStartTime);
         });
-        fetchKeyIndex(keyFilesBaseUrl, 'video').then((index) => {
+        fetchKeyIndex(keyFilesHttpBaseUrl, MediaType.VIDEO).then((index) => {
             videoKeyIndex = extractKeyIndexUrls(index);
-            fetchKeysOnIndexUpdated('video', videoKeyStartTime);
+            fetchKeysOnIndexUpdated(MediaType.VIDEO, videoKeyStartTime);
         });
     }
 
@@ -193,7 +176,7 @@ function ExmgFragmentDecrypt(config) {
                 return;
             }
             keyMap[url] = true; // mark as requested
-            fetchKeyMessageUrl(keyFilesBaseUrl + '/' + url + keyFilesCustomExt)
+            fetchKeyMessageUrl(keyFilesHttpBaseUrl + '/' + url + keyFilesHttpCustomExt)
                 .then((message) => {
                     keyMap[url] = message; // store result
                     onCipherMessage(message);
@@ -208,10 +191,10 @@ function ExmgFragmentDecrypt(config) {
 
     function fetchKeysOnIndexUpdated(codecType, fromTime = 0) {
         switch (codecType) {
-        case 'audio':
+        case MediaType.AUDIO:
             fetchAndMapKeys(audioKeyIndex, audioKeyMap, fromTime);
             break;
-        case 'video':
+        case MediaType.VIDEO:
             fetchAndMapKeys(videoKeyIndex, videoKeyMap, fromTime);
             break;
         }
@@ -235,10 +218,11 @@ function ExmgFragmentDecrypt(config) {
 
         let messageObj;
 
+        if (message === "ping") return;
+
         // may fail if JSON message data is broken
         try {
             messageObj = JSON.parse(message);
-            //console.debug('Parsed received cipher message:', messageObj);
         } catch (err) {
             console.error('Failed to parse JSON:', message);
             console.error(err);
@@ -301,9 +285,9 @@ function ExmgFragmentDecrypt(config) {
             // map useful track info to id
             let type;
             if (tkhd.volume === 0 && tkhd.width > 0 && tkhd.height > 0) {
-                type = 'video';
+                type = MediaType.VIDEO;
             } else if (tkhd.volume > 0 && tkhd.width === 0 && tkhd.height === 0) {
-                type = 'audio';
+                type = MediaType.AUDIO;
             } else {
                 throw new Error('Unable to recognize track type from `tkhd` atom');
                 // FIXME: in case necessary, there are unambiguous solutions here
@@ -345,10 +329,10 @@ function ExmgFragmentDecrypt(config) {
             const trackInfo = movInitDataHash[makeSegmentTypeHashkey(mediaType, trackId)];
 
             switch (mediaType) {
-            case 'audio':
+            case MediaType.AUDIO:
                 audioKeyStartTime = firstPts;
                 break;
-            case 'video':
+            case MediaType.VIDEO:
                 videoKeyStartTime = firstPts;
                 break;
             }
@@ -356,7 +340,7 @@ function ExmgFragmentDecrypt(config) {
             // start updating keys once key-start-time is first set
             if (!updateKeysOn) {
                 updateKeysOn = true;
-                updateKeys();
+                updateKeysFromHttp();
             }
 
             // lookup key

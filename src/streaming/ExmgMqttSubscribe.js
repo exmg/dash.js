@@ -1,24 +1,42 @@
 import { v4 as getUuid } from 'uuid';
+import {getLogFunc} from "./ExmgLog";
+
+const DEBUG = true;
+
+const log = getLogFunc(DEBUG, "exmg-mqtt");
 
 const MQTT_HOST = "ws://xvm-190-41.dc0.ghst.net:8885/mqtt";
 const MQTT_TOPIC = '/mqtt';
-const MQTT_CLIENT_ID = getUuid();
+const MQTT_CLIENT_ID = "exmg-mqtt-web-" + getUuid();
 const MQTT_USERNAME = "user1";
 const MQTT_PASSWORD = "liverymqtt123";
 
-let mqttClient = null;
+const ENABLE_SINGLETON = true;
 
-mqttClient = createMqttSubscribeClient(onMqttMessageRcv);
+let singletonMqttClient = null;
 
-function createMqttSubscribeClient(onMessage) {
+if (ENABLE_SINGLETON) {
+    singletonMqttClient = createMqttSubscribeClient();
+}
 
-    console.info('EXMG MQTT:', 'connecting MQTT subscribe');
+/**
+ *
+ * @param {string} host
+ * @param {string} clientId
+ * @param {string} username
+ * @param {string} password
+ */
+function createMqttSubscribeClient(host = MQTT_HOST,
+    clientId = MQTT_CLIENT_ID,
+    username = MQTT_USERNAME,
+    password = MQTT_PASSWORD) {
 
-    const host = MQTT_HOST;
+    log('connecting MQTT subscribe');
+
     const options = {
-        clientId: MQTT_CLIENT_ID,
-        username: MQTT_USERNAME,
-        password: MQTT_PASSWORD,
+        clientId,
+        username,
+        password,
         protocolId: 'MQTT',
         protocolVersion: 4, // actually meaning 3.1.1, while 3 means 3.1 and is incompatible with the latter
         keepalive: 4,
@@ -38,28 +56,17 @@ function createMqttSubscribeClient(onMessage) {
             if (err) {
                 console.error('EXMG MQTT:', 'subscribe error: ' + err);
             } else {
-                console.info('EXMG MQTT:', 'subscribed');
+                log('subscribed');
             }
         });
     });
     client.on('message', function (topic, message) {
-        console.log('EXMG MQTT:', topic, message)
-        onMessage(message.toString());
+        log(topic, message)
     });
     return client;
 }
 
-/*
-// TODO: destroy client when player terminates session
-function disposeMqttSubClient() {
-
-}
-*/
-
-function onMqttMessageRcv(data) {
-    console.log(data);
-}
-
 export {
-    mqttClient
+    createMqttSubscribeClient,
+    singletonMqttClient
 };
