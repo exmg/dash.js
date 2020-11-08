@@ -7,27 +7,28 @@ import Settings from './../core/Settings';
 ExmgFragmentDecrypt.__dashjs_factory_name = 'ExmgFragmentDecrypt';
 export default FactoryMaker.getSingletonFactory(ExmgFragmentDecrypt);
 
-import {singletonMqttClient} from './ExmgMqttSubscribe';
+import {getSingletonMqttClient} from './ExmgMqttSubscribe';
 import {decryptBufferFromAesCtr} from './ExmgCrypto';
-import {getLogFunc} from "./ExmgLog";
+import {getConsoleFunc} from './ExmgConsole';
 
 const DEBUG = true;
+const VERBOSE = false;
 
 const USE_MQTT_KEY_TRANSPORT = true;
 
-const log = getLogFunc(DEBUG, "exmg-fragment-decrypt");
+const log = getConsoleFunc(DEBUG, 'exmg-fragment-decrypt');
+const debug = getConsoleFunc(DEBUG && VERBOSE, 'exmg-fragment-decrypt', 'debug');
 
 const MediaType = {
     AUDIO: 'audio',
     VIDEO: 'video'
-}
+};
 
 function ExmgFragmentDecrypt(config) {
 
     log('Creating ExmgFragmentDecrypt instance');
 
     const context = this.context;
-
     const _eventBus = EventBus(context).getInstance();
 
     config = config || {};
@@ -69,18 +70,15 @@ function ExmgFragmentDecrypt(config) {
             keyFilesHttpCustomExt = '';
         }
 
-        keyUpdateHttpIntervalMs
-            = Settings(context).getInstance().get().streaming.exmg.keyUpdateIntervalMs;
+        keyUpdateHttpIntervalMs = Settings(context).getInstance().get().streaming.exmg.keyUpdateIntervalMs;
 
-        keyIndexUpdateHttpInterval
-            = setInterval(updateKeysFromHttp, keyUpdateHttpIntervalMs);
+        keyIndexUpdateHttpInterval = setInterval(updateKeysFromHttp, keyUpdateHttpIntervalMs);
         updateKeysFromHttp(); // run once immediately on init
 
         if (USE_MQTT_KEY_TRANSPORT) {
-            singletonMqttClient.on('message', (_topic, messageBuf) => {
+            getSingletonMqttClient().on('message', (_topic, messageBuf) => {
                 const message = messageBuf.toString();
-                log(message)
-                onCipherMessage(message.substr(0, message.length - 1))
+                onCipherMessage(message.substr(0, message.length - 1));
             });
         }
 
@@ -100,7 +98,6 @@ function ExmgFragmentDecrypt(config) {
                         reject(null);
                         return;
                     }
-                    //log('Received messsage:', JSON.parse(message));
                     resolve(message);
                 })
                 .catch((err) => {
@@ -218,7 +215,7 @@ function ExmgFragmentDecrypt(config) {
 
         let messageObj;
 
-        if (message === "ping") return;
+        if (message === 'ping') return;
 
         // may fail if JSON message data is broken
         try {
@@ -228,6 +225,8 @@ function ExmgFragmentDecrypt(config) {
             console.error(err);
             return;
         }
+
+        log('Received message:', messageObj);
 
         try {
 
@@ -249,7 +248,7 @@ function ExmgFragmentDecrypt(config) {
             _eventBus.trigger(Events.EXMG_LIVE_SYNC_CIPHER_MESSAGE, {trackId, mediaType, mediaTimeSecs, keyDurationSecs});
 
             if (cipherMessages.length === 1) {
-                console.debug(`Received very first cipher message for track ${mediaType}_${trackId} at ${mediaTimeSecs} secs`);
+                debug(`Received very first cipher message for track ${mediaType}_${trackId} at ${mediaTimeSecs} secs`);
             }
 
         } catch (err) {
@@ -311,7 +310,7 @@ function ExmgFragmentDecrypt(config) {
         const trafs = parsedFile.fetchAll('traf');
         if (trafs.length === 0) {
             console.warn('Media segment was not init data but has no track fragments');
-            console.debug(parsedFile);
+            console.warn(parsedFile);
             onResult(data);
             return;
         }
@@ -413,7 +412,7 @@ function ExmgFragmentDecrypt(config) {
             const keyShort = new Uint32Array([keyParsed]);
             const ivShort = new Uint32Array([ivParsed]);
 
-            log('Short key/IV:',
+            debug('Short key/IV:',
                 cipherMessageForBuffer.key, keyShort,
                 cipherMessageForBuffer.iv, ivShort);
 
@@ -426,7 +425,7 @@ function ExmgFragmentDecrypt(config) {
             keyView.setUint32(0, keyParsed, true);
             ivView.setUint32(0, ivParsed, true);
 
-            log('Key/IV:', key, iv);
+            debug('Key/IV:', key, iv);
 
             // decrypt the mdat buffer
             const mdat = mdats[index];
@@ -439,7 +438,8 @@ function ExmgFragmentDecrypt(config) {
             const decryptTimeMs = perf.now() - now;
             log(`Decrypted ${clearBuffers.length} fragment buffers in ${decryptTimeMs.toFixed(3)} ms`);
             clearBuffers.forEach((clearMdatPayload, index) => {
-                log('Copying back into digest data clear bytes:', clearMdatPayload.byteLength, mdats[index].size - 8);
+                debug('Copying back into digest data clear bytes:',
+                    clearMdatPayload.byteLength, mdats[index].size - 8);
                 const mdatDataOffset = mdats[index]._offset + 8;
                 digestDataBuffer.set(clearMdatPayload, mdatDataOffset);
             });
@@ -469,10 +469,9 @@ function ExmgFragmentDecrypt(config) {
         }
         if (!matchMsg) {
             console.warn('NOT-FOUND matching cipher-message for lookup-PTS:', firstPts, '| type:', trackType);
-            //console.debug(JSON.stringify(cipherMessages));
         } else {
-            console.debug('FOUND matching cipher-message for lookup-PTS:', firstPts, '| type:', trackType, '| key:', matchMsg.key);
-            log(matchMsg);
+            debug('FOUND matching cipher-message for lookup-PTS:', firstPts, '| type:', trackType, '| key:', matchMsg.key);
+            debug(matchMsg);
         }
         return matchMsg;
     }

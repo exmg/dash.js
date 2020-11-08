@@ -1,30 +1,32 @@
+import mqtt from 'mqtt';
 import { v4 as getUuid } from 'uuid';
-import {getLogFunc} from "./ExmgLog";
+import {getConsoleFunc} from './ExmgConsole';
 
 const DEBUG = true;
 
-const log = getLogFunc(DEBUG, "exmg-mqtt");
+const log = getConsoleFunc(DEBUG, 'exmg-mqtt');
 
-const MQTT_HOST = "ws://xvm-190-41.dc0.ghst.net:8885/mqtt";
+const MQTT_HOST = 'ws://xvm-190-41.dc0.ghst.net:8885/mqtt';
 const MQTT_TOPIC = '/mqtt';
-const MQTT_CLIENT_ID = "exmg-mqtt-web-" + getUuid();
-const MQTT_USERNAME = "user1";
-const MQTT_PASSWORD = "liverymqtt123";
+const MQTT_CLIENT_ID = 'exmg-mqtt-web-' + getUuid();
+const MQTT_USERNAME = 'user1';
+const MQTT_PASSWORD = 'liverymqtt123';
 
 const ENABLE_SINGLETON = true;
 
-let singletonMqttClient = null;
+let singletonMqttClient;
 
 if (ENABLE_SINGLETON) {
     singletonMqttClient = createMqttSubscribeClient();
 }
 
 /**
- *
  * @param {string} host
  * @param {string} clientId
  * @param {string} username
  * @param {string} password
+ *
+ * @returns {mqtt.Client} See https://github.com/mqttjs/MQTT.js
  */
 function createMqttSubscribeClient(host = MQTT_HOST,
     clientId = MQTT_CLIENT_ID,
@@ -45,11 +47,7 @@ function createMqttSubscribeClient(host = MQTT_HOST,
         clean: true
     };
 
-    if (!window.mqtt) {
-        throw new Error('`mqtt` is not defined in window scope');
-    }
-
-    const client = window.mqtt.connect(host, options);
+    const client = mqtt.connect(host, options);
     client.on('connect', function () {
         // TODO: handle/retry initial connection/sub failures
         client.subscribe(MQTT_TOPIC, function (err) {
@@ -60,13 +58,14 @@ function createMqttSubscribeClient(host = MQTT_HOST,
             }
         });
     });
-    client.on('message', function (topic, message) {
-        log(topic, message)
-    });
     return client;
+}
+
+function getSingletonMqttClient() {
+    return singletonMqttClient;
 }
 
 export {
     createMqttSubscribeClient,
-    singletonMqttClient
+    getSingletonMqttClient
 };

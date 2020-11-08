@@ -64,7 +64,8 @@
     "fast-deep-equal": "2.0.1",
     "imsc": "^1.0.2",
     "mkdirp": "^1.0.4",
-    "uuid": "^8.3.1"
+    "mqtt": "4.2.4",
+    "uuid": "8.3.1"
   },
   "repository": {
     "type": "git",
