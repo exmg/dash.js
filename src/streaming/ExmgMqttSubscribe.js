@@ -6,7 +6,7 @@ const DEBUG = true;
 
 const log = getConsoleFunc(DEBUG, 'exmg-mqtt');
 
-const MQTT_HOST = 'ws://xvm-190-41.dc0.ghst.net:8885/mqtt';
+const MQTT_HOST = 'wss://xvm-190-41.dc0.ghst.net:8884/mqtt';
 const MQTT_TOPIC = '/mqtt';
 const MQTT_CLIENT_ID = 'exmg-mqtt-web-' + getUuid();
 const MQTT_USERNAME = 'user1';
