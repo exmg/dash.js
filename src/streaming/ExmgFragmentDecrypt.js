@@ -76,7 +76,9 @@ function ExmgFragmentDecrypt(config) {
         updateKeysFromHttp(); // run once immediately on init
 
         if (USE_MQTT_KEY_TRANSPORT) {
-            getSingletonMqttClient().on('message', (_topic, messageBuf) => {
+
+            const mqttConfig = Settings(context).getInstance().get().streaming.exmg.mqtt;
+            getSingletonMqttClient(mqttConfig).on('message', (_topic, messageBuf) => {
                 const message = messageBuf.toString();
                 onCipherMessage(message.substr(0, message.length - 1));
             });

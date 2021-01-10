@@ -356,7 +356,14 @@ function Settings() {
             exmg: {
                 keyFilesBaseUrl: null,
                 keyFilesCustomExt: null,
-                keyUpdateIntervalMs: 2000
+                keyUpdateIntervalMs: 2000,
+                mqtt: {
+                    host: null,
+                    topic: null,
+                    clientId: '',
+                    username: '',
+                    password: ''
+                }
             },
             metricsMaxListDepth: 1000,
             abandonLoadTimeout: 10000,

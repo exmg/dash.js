@@ -1,37 +1,18 @@
 import mqtt from 'mqtt';
-import { v4 as getUuid } from 'uuid';
 import {getConsoleFunc} from './ExmgConsole';
 
 const DEBUG = true;
 
 const log = getConsoleFunc(DEBUG, 'exmg-mqtt');
 
-const MQTT_HOST = 'wss://xvm-190-41.dc0.ghst.net:8884/mqtt';
-const MQTT_TOPIC = '/mqtt';
-const MQTT_CLIENT_ID = 'exmg-mqtt-web-' + getUuid();
-const MQTT_USERNAME = 'user1';
-const MQTT_PASSWORD = 'liverymqtt123';
-
-const ENABLE_SINGLETON = true;
-
 let singletonMqttClient;
 
-if (ENABLE_SINGLETON) {
-    singletonMqttClient = createMqttSubscribeClient();
-}
-
 /**
- * @param {string} host
- * @param {string} clientId
- * @param {string} username
- * @param {string} password
+ * @param {mqttConfig}
  *
  * @returns {mqtt.Client} See https://github.com/mqttjs/MQTT.js
  */
-function createMqttSubscribeClient(host = MQTT_HOST,
-    clientId = MQTT_CLIENT_ID,
-    username = MQTT_USERNAME,
-    password = MQTT_PASSWORD) {
+function createMqttSubscribeClient({host, topic, clientId, username, password}) {
 
     log('connecting MQTT subscribe');
 
@@ -50,7 +31,7 @@ function createMqttSubscribeClient(host = MQTT_HOST,
     const client = mqtt.connect(host, options);
     client.on('connect', function () {
         // TODO: handle/retry initial connection/sub failures
-        client.subscribe(MQTT_TOPIC, function (err) {
+        client.subscribe(topic, function (err) {
             if (err) {
                 console.error('EXMG MQTT:', 'subscribe error: ' + err);
             } else {
@@ -61,7 +42,10 @@ function createMqttSubscribeClient(host = MQTT_HOST,
     return client;
 }
 
-function getSingletonMqttClient() {
+function getSingletonMqttClient(config) {
+    if (!singletonMqttClient) {
+        singletonMqttClient = createMqttSubscribeClient(config);
+    }
     return singletonMqttClient;
 }
 
